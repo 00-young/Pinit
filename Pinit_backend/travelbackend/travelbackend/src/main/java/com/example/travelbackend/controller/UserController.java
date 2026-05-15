@@ -23,8 +23,8 @@ public class UserController {
     public ResponseEntity<Map<String, Object>> register(@RequestBody User user) {
         Map<String, Object> result = new HashMap<>();
         try {
-            // 아이디 중복 체크
-            Optional<User> existing = userRepository.findByUserID(user.getUserID());
+            // firebaseUid 중복 체크
+            Optional<User> existing = userRepository.findByFirebaseUid(user.getFirebaseUid());
             if (existing.isPresent()) {
                 result.put("success", false);
                 result.put("message", "이미 사용 중인 아이디입니다.");
@@ -47,22 +47,17 @@ public class UserController {
     public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> request) {
         Map<String, Object> result = new HashMap<>();
         try {
-            String userID = request.get("userID");
-            String userPW = request.get("userPW");
+            String firebaseUid = request.get("firebaseUid");
 
-            Optional<User> userOpt = userRepository.findByUserID(userID);
+            Optional<User> userOpt = userRepository.findByFirebaseUid(firebaseUid);
             if (!userOpt.isPresent()) {
                 result.put("success", false);
-                result.put("message", "존재하지 않는 아이디입니다.");
+                result.put("message", "존재하지 않는 유저입니다.");
                 return ResponseEntity.ok(result);
             }
 
             User user = userOpt.get();
-            if (!user.getUserPW().equals(userPW)) {
-                result.put("success", false);
-                result.put("message", "비밀번호가 틀렸습니다.");
-                return ResponseEntity.ok(result);
-            }
+            // 비밀번호 체크 로직 제거 (Firebase 인증 사용)
 
             result.put("success", true);
             result.put("message", "로그인 성공!");
