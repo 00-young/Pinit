@@ -2,12 +2,14 @@ package com.example.travelbackend.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
 @Table(name = "Place")
 @Getter
 @Setter
+@NoArgsConstructor
 public class Place {
     @Id
     @Column(name = "placeNumber")
