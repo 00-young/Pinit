@@ -1,4 +1,6 @@
-백엔드 SpringBoot + MySQL 폴더 추가. 프론트 분들은 android 폴더 사용. 백엔드 서버 사용할 때 application.properties에서 password 자신의 MySQL 비밀번호로 변경해야 합니다(아직 공유 안함).
+백엔드 SpringBoot + MySQL 폴더 추가.  
+프론트 분들은 android 폴더 사용.  
+백엔드 서버 사용할 때 application.properties에서 password 자신의 MySQL 비밀번호로 변경해야 합니다(아직 공유 안함).  
 솔직히 수업 때 배운게 거의 없어서 대부분 AI로 만들었습니다. 참고 바랍니다.
 
 Mysql 스키마
