@@ -2,6 +2,7 @@
 솔직히 수업 때 배운게 거의 없어서 대부분 AI로 만들었습니다. 참고 바랍니다.
 
 Mysql 스키마
+```sql
 -- 1. 유저 테이블 (구글 로그인 및 마이페이지 필드 추가)
 CREATE TABLE `User` (  
     `userNumber` int NOT NULL AUTO_INCREMENT,
