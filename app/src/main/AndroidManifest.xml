@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <application
+        android:label="TravelTracker"
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="true">
+
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyD9h6vVwwJO8fRtf2iWLgt4xQWB9cgOXIc" />
+
+        <activity android:name=".activity.MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".activity.PostTravelSettingActivity" android:exported="false" />
+        <activity android:name=".activity.PostSearchActivity" android:exported="false" />
+        <activity android:name=".activity.TripDetailActivity" android:exported="false" />
+        <activity android:name=".activity.AddTripActivity" android:exported="false" />
+        <activity android:name=".activity.AddScheduleActivity" android:exported="false" />
+        <activity android:name=".activity.PlaceSearchActivity" android:exported="false" />
+        <activity android:name=".activity.PlaceDetailActivity" android:exported="false" />
+        <activity android:name=".activity.NearbyPlacesActivity" android:exported="false" />
+        <activity android:name=".activity.AddBudgetActivity" android:exported="false" />
+        <activity android:name=".activity.TripRecordActivity" android:exported="false" />
+        <activity android:name=".activity.ReceiptScanActivity" android:exported="false" />
+        <activity android:name=".activity.TripSummaryActivity" android:exported="false" />
+    </application>
+</manifest>

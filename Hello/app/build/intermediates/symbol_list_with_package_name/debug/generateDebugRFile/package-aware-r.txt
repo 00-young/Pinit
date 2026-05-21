@@ -1,0 +1,19 @@
+org.androidtown.hello
+color black
+color white
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+id activity_main
+id button1
+id button2
+id spinner
+id textView
+layout activity_main
+layout second
+mipmap ic_launcher
+mipmap ic_launcher_round
+string app_name
+style Base_Theme_Hello
+style Theme_Hello
+xml backup_rules
+xml data_extraction_rules

@@ -1,0 +1,32 @@
+# Firebase
+google-services.json
+
+# API Keys
+apikey.properties
+secrets.properties
+
+# Local config
+local.properties
+
+# Gradle
+.gradle
+
+# Build
+/build
+/app/build
+
+# Android Studio
+.idea
+*.iml
+*.apk
+*.aab
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
+
+captures
+.externalNativeBuild
+.cxx

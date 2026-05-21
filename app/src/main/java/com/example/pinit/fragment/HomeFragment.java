@@ -1,0 +1,86 @@
+package com.example.pinit.fragment;
+
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.example.pinit.R;
+import com.example.pinit.activity.AddTripActivity;
+import com.example.pinit.activity.TripDetailActivity;
+import com.example.pinit.pinit.TripAdapter;
+import com.example.pinit.database.DatabaseHelper;
+import com.example.pinit.model.Trip;
+
+import java.util.List;
+
+public class HomeFragment extends Fragment {
+
+    private DatabaseHelper dbHelper;
+    private TripAdapter adapter;
+    private RecyclerView recyclerView;
+    private View layoutEmpty;
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_home, container, false);
+
+        dbHelper = new DatabaseHelper(requireContext());
+        recyclerView = view.findViewById(R.id.recyclerView);
+        layoutEmpty = view.findViewById(R.id.layoutEmpty);
+
+        recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
+        adapter = new TripAdapter(requireContext(), new java.util.ArrayList<>(),
+                trip -> {
+                    Intent intent = new Intent(requireContext(), TripDetailActivity.class);
+                    intent.putExtra("trip_id", trip.getId());
+                    startActivity(intent);
+                },
+                trip -> {
+                    new AlertDialog.Builder(requireContext())
+                            .setTitle("여행 삭제")
+                            .setMessage("'" + trip.getTitle() + "' 여행을 삭제하시겠습니까?")
+                            .setPositiveButton("삭제", (d, w) -> {
+                                dbHelper.deleteTrip(trip.getId());
+                                loadData();
+                            })
+                            .setNegativeButton("취소", null).show();
+                });
+        recyclerView.setAdapter(adapter);
+
+        view.findViewById(R.id.btnNewTrip).setOnClickListener(v ->
+                startActivity(new Intent(requireContext(), AddTripActivity.class)));
+
+        view.findViewById(R.id.btnMakePlan).setOnClickListener(v ->
+                startActivity(new Intent(requireContext(), AddTripActivity.class)));
+
+        view.findViewById(R.id.btnOpenMyPage).setOnClickListener(v ->
+                getParentFragmentManager().beginTransaction()
+                        .replace(R.id.fragmentContainer, new MyPageFragment())
+                        .addToBackStack(null)
+                        .commit());
+
+        loadData();
+        return view;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        loadData();
+    }
+
+    private void loadData() {
+        List<Trip> trips = dbHelper.getAllTrips();
+        adapter.updateList(trips);
+        boolean isEmpty = trips.isEmpty();
+        layoutEmpty.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
+        recyclerView.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
+    }
+}

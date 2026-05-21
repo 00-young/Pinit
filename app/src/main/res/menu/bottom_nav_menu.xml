@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_home"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:title="내 여행" />
+
+    <item
+        android:id="@+id/nav_place"
+        android:icon="@android:drawable/ic_menu_search"
+        android:title="장소 검색" />
+
+    <item
+        android:id="@+id/nav_budget"
+        android:icon="@android:drawable/ic_menu_agenda"
+        android:title="가계부" />
+
+    <item
+        android:id="@+id/nav_community"
+        android:icon="@android:drawable/ic_menu_share"
+        android:title="커뮤니티" />
+</menu>

@@ -1,0 +1,28 @@
+{
+    "logs": [
+        {
+            "outputFile": "org.androidtown.hello.test.app-mergeDebugAndroidTestResources-2:/values/values.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\minse\\.gradle\\caches\\9.2.1\\transforms\\2a2dd6bdfc63ba15728d337c9f6704f1\\workspace\\transformed\\core-1.5.0\\res\\values\\values.xml",
+                    "from": {
+                        "startLines": "4,11",
+                        "startColumns": "0,0",
+                        "startOffsets": "176,544",
+                        "endLines": "10,17",
+                        "endColumns": "8,8",
+                        "endOffsets": "543,909"
+                    },
+                    "to": {
+                        "startLines": "2,9",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,427",
+                        "endLines": "8,15",
+                        "endColumns": "8,8",
+                        "endOffsets": "422,792"
+                    }
+                }
+            ]
+        }
+    ]
+}

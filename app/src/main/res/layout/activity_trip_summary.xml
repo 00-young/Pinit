@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#F5F5F5">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="#FFFFFF"
+            app:titleTextColor="#000000"/>
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- 여행 기본 정보 카드 (노란색) -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardElevation="3dp"
+                app:cardCornerRadius="12dp"
+                app:cardBackgroundColor="#FFDA44">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    <TextView android:id="@+id/tvTitle"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textSize="24sp" android:textStyle="bold" android:textColor="#000000"/>
+                    <TextView android:id="@+id/tvDestination"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textSize="14sp" android:textColor="#333333" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvDate"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textSize="14sp" android:textColor="#333333" android:layout_marginTop="2dp"/>
+                    <TextView android:id="@+id/tvDday"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textSize="13sp" android:textStyle="bold" android:textColor="#555555"
+                        android:layout_marginTop="6dp"/>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- 통계 3개 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
+
+                <androidx.cardview.widget.CardView
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:layout_marginRight="6dp"
+                    app:cardElevation="2dp" app:cardCornerRadius="12dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical" android:padding="14dp" android:gravity="center">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="📅" android:textSize="24sp"/>
+                        <TextView android:id="@+id/tvScheduleCount"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="0" android:textSize="22sp" android:textStyle="bold"
+                            android:textColor="#000000" android:layout_marginTop="4dp"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="개 일정" android:textSize="12sp" android:textColor="#999999"/>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:layout_marginRight="6dp"
+                    app:cardElevation="2dp" app:cardCornerRadius="12dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical" android:padding="14dp" android:gravity="center">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="💰" android:textSize="24sp"/>
+                        <TextView android:id="@+id/tvUsedPercent"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="0%" android:textSize="22sp" android:textStyle="bold"
+                            android:textColor="#000000" android:layout_marginTop="4dp"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="예산 사용" android:textSize="12sp" android:textColor="#999999"/>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    app:cardElevation="2dp" app:cardCornerRadius="12dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical" android:padding="14dp" android:gravity="center">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="📝" android:textSize="24sp"/>
+                        <TextView android:id="@+id/tvRecordCount"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="0" android:textSize="22sp" android:textStyle="bold"
+                            android:textColor="#000000" android:layout_marginTop="4dp"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="개 기록" android:textSize="12sp" android:textColor="#999999"/>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+            </LinearLayout>
+
+            <!-- 예산 현황 카드 -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardElevation="2dp" app:cardCornerRadius="12dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="💳 예산 현황" android:textSize="15sp" android:textStyle="bold"
+                        android:textColor="#000000" android:layout_marginBottom="12dp"/>
+
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:layout_marginBottom="6dp">
+                        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:text="총 예산"
+                            android:textSize="14sp" android:textColor="#666666"/>
+                        <TextView android:id="@+id/tvBudgetTotal"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:textSize="14sp" android:textStyle="bold" android:textColor="#000000"/>
+                    </LinearLayout>
+
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:layout_marginBottom="6dp">
+                        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:text="사용 금액"
+                            android:textSize="14sp" android:textColor="#666666"/>
+                        <TextView android:id="@+id/tvBudgetUsed"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:textSize="14sp" android:textStyle="bold" android:textColor="#F44336"/>
+                    </LinearLayout>
+
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+                        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:text="남은 예산"
+                            android:textSize="14sp" android:textColor="#666666"/>
+                        <TextView android:id="@+id/tvBudgetRemain"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:textSize="14sp" android:textStyle="bold" android:textColor="#4CAF50"/>
+                    </LinearLayout>
+
+                    <ProgressBar
+                        android:id="@+id/progressBudget"
+                        style="@android:style/Widget.ProgressBar.Horizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="12dp"
+                        android:layout_marginTop="12dp"
+                        android:max="100"
+                        android:progressTint="#FFDA44"
+                        android:progressBackgroundTint="#EEEEEE"/>
+
+                    <!-- 카테고리별 -->
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="카테고리별 지출" android:textSize="13sp" android:textColor="#999999"
+                        android:layout_marginTop="16dp" android:layout_marginBottom="10dp"/>
+
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="🍽️" android:textSize="18sp" android:gravity="center"/>
+                            <TextView android:id="@+id/tvCatFood" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:text="0원"
+                                android:textSize="10sp" android:textColor="#555555" android:gravity="center"/>
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="식비" android:textSize="10sp" android:textColor="#999999" android:gravity="center"/>
+                        </LinearLayout>
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="🚌" android:textSize="18sp" android:gravity="center"/>
+                            <TextView android:id="@+id/tvCatTransport" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:text="0원"
+                                android:textSize="10sp" android:textColor="#555555" android:gravity="center"/>
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="교통" android:textSize="10sp" android:textColor="#999999" android:gravity="center"/>
+                        </LinearLayout>
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="🏨" android:textSize="18sp" android:gravity="center"/>
+                            <TextView android:id="@+id/tvCatLodge" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:text="0원"
+                                android:textSize="10sp" android:textColor="#555555" android:gravity="center"/>
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="숙박" android:textSize="10sp" android:textColor="#999999" android:gravity="center"/>
+                        </LinearLayout>
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="🛍️" android:textSize="18sp" android:gravity="center"/>
+                            <TextView android:id="@+id/tvCatShopping" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:text="0원"
+                                android:textSize="10sp" android:textColor="#555555" android:gravity="center"/>
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="쇼핑" android:textSize="10sp" android:textColor="#999999" android:gravity="center"/>
+                        </LinearLayout>
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="💸" android:textSize="18sp" android:gravity="center"/>
+                            <TextView android:id="@+id/tvCatEtc" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:text="0원"
+                                android:textSize="10sp" android:textColor="#555555" android:gravity="center"/>
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="기타" android:textSize="10sp" android:textColor="#999999" android:gravity="center"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- 일정 요약 카드 -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardElevation="2dp" app:cardCornerRadius="12dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="📅 일정 요약" android:textSize="15sp" android:textStyle="bold"
+                        android:textColor="#000000" android:layout_marginBottom="8dp"/>
+                    <TextView android:id="@+id/tvScheduleSummary"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:textSize="13sp" android:textColor="#555555" android:lineSpacingExtra="4dp"/>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- 기록 요약 카드 -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardElevation="2dp" app:cardCornerRadius="12dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="📝 여행 기록" android:textSize="15sp" android:textStyle="bold"
+                        android:textColor="#000000" android:layout_marginBottom="8dp"/>
+                    <TextView android:id="@+id/tvRecordSummary"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:textSize="13sp" android:textColor="#555555" android:lineSpacingExtra="4dp"/>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>
