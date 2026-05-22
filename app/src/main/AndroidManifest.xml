@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
-        android:label="TravelTracker"
+        android:label="Pin It"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">
 
@@ -16,12 +16,13 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="${GOOGLE_MAPS_API_KEY}" />
 
-        <activity android:name=".activity.MainActivity" android:exported="true">
+        <activity android:name=".activity.LoginActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".activity.MainActivity" android:exported="false" />
 
         <activity android:name=".activity.PostTravelSettingActivity" android:exported="false" />
         <activity android:name=".activity.PostSearchActivity" android:exported="false" />
