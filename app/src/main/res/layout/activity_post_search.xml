@@ -91,39 +91,37 @@
             </LinearLayout>
 
             <LinearLayout
-                android:id="@+id/selectedTagRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
                 android:layout_marginStart="16dp"
-                android:layout_marginTop="14dp"
                 android:layout_marginEnd="16dp"
-                android:gravity="top"
-                android:orientation="horizontal">
+                android:layout_marginTop="14dp">
 
-            <Button
-                android:id="@+id/btnTravelSetting"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:backgroundTint="#FFFFFF"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:text="☷  여행설정"
-                android:textColor="#222222"
-                android:textSize="14sp" />
+                <Button
+                    android:id="@+id/btnTravelSetting"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:backgroundTint="#FFFFFF"
+                    android:minHeight="0dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:text="☷  여행설정"
+                    android:textColor="#222222"
+                    android:textSize="14sp" />
 
                 <HorizontalScrollView
-                    android:id="@+id/selectedTagScroller"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
+                    android:id="@+id/travelSettingTagScroller"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:layout_weight="1"
                     android:fillViewport="false"
                     android:overScrollMode="never"
                     android:scrollbars="none">
 
                     <com.google.android.material.chip.ChipGroup
-                        android:id="@+id/selectedTagContainer"
+                        android:id="@+id/travelSettingTagContainer"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         app:chipSpacingHorizontal="6dp"
@@ -131,11 +129,30 @@
                 </HorizontalScrollView>
             </LinearLayout>
 
+            <HorizontalScrollView
+                android:id="@+id/selectedTagScroller"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginEnd="16dp"
+                android:fillViewport="false"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/selectedTagContainer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:chipSpacingHorizontal="6dp"
+                    app:singleLine="true" />
+            </HorizontalScrollView>
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
-                android:layout_marginTop="36dp"
+                android:layout_marginTop="24dp"
                 android:text="함께"
                 android:textColor="#111111"
                 android:textSize="26sp" />

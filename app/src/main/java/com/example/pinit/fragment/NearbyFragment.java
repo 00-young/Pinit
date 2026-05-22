@@ -18,7 +18,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
 import com.example.pinit.activity.PlaceDetailActivity;
-import com.example.pinit.pinit.PlaceAdapter;
+import com.example.pinit.adapter.PlaceAdapter;
 import com.example.pinit.database.PlacesApiHelper;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;

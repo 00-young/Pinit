@@ -18,7 +18,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
-import com.example.pinit.pinit.ScheduleDetailAdapter;
+import com.example.pinit.adapter.ScheduleDetailAdapter;
 import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.Schedule;
 import com.example.pinit.model.Trip;

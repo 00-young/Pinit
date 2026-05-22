@@ -20,7 +20,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.pinit.R;
 import com.example.pinit.activity.AddBudgetActivity;
 import com.example.pinit.activity.ReceiptScanActivity;
-import com.example.pinit.pinit.BudgetAdapter;
+import com.example.pinit.adapter.BudgetAdapter;
 import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.Budget;
 import com.example.pinit.model.Trip;

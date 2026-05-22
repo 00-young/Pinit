@@ -9,7 +9,7 @@ import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.example.pinit.R;
-import com.example.pinit.pinit.MyPlansAdapter;
+import com.example.pinit.adapter.MyPlansAdapter;
 import com.example.pinit.model.MyPlan;
 import com.example.pinit.model.DailySchedule;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;

@@ -1,4 +1,4 @@
-package com.example.pinit.pinit;
+package com.example.pinit.adapter;
 
 import android.content.Context;
 import android.graphics.Color;

@@ -14,7 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.pinit.R;
 import com.example.pinit.activity.AddTripActivity;
 import com.example.pinit.activity.TripDetailActivity;
-import com.example.pinit.pinit.TripAdapter;
+import com.example.pinit.adapter.TripAdapter;
 import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.Trip;
 

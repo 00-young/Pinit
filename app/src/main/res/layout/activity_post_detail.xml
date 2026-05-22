@@ -284,6 +284,7 @@
             </LinearLayout>
 
             <Button
+                android:id="@+id/btnSaveAllSchedule"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_marginTop="20dp"
@@ -309,6 +310,7 @@
                     android:textStyle="bold" />
 
                 <Button
+                    android:id="@+id/btnSaveDay1Schedule"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
                     android:layout_alignParentEnd="true"
@@ -371,6 +373,7 @@
                     android:textStyle="bold" />
 
                 <Button
+                    android:id="@+id/btnSaveDay2Schedule"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
                     android:layout_alignParentEnd="true"
@@ -442,22 +445,34 @@
         android:paddingHorizontal="16dp">
 
         <ImageView
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:id="@+id/btnActionShare"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:layout_marginEnd="20dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="4dp"
             android:src="@drawable/ic_share"
             app:tint="#888888" />
 
         <ImageView
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:id="@+id/btnActionComment"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:layout_marginEnd="20dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="4dp"
             android:src="@drawable/ic_chat"
             app:tint="#888888" />
 
         <ImageView
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:id="@+id/btnActionScrap"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="4dp"
             android:src="@drawable/ic_bookmark"
             app:tint="#888888" />
     </LinearLayout>

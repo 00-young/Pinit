@@ -7,7 +7,6 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
-import android.view.inputmethod.EditorInfo;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -17,6 +16,8 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.pinit.R;
@@ -51,7 +52,12 @@ public class PostTravelSettingActivity extends AppCompatActivity {
     private String savedCountry = "";
     private String selectedPeople = "";
     private final String[] peopleOptions = {"혼자", "2명", "3~4명", "가족"};
+    private androidx.activity.result.ActivityResultLauncher<Intent> travelSettingLauncher;
+    private com.google.android.material.chip.ChipGroup selectedTagContainer;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd", Locale.KOREAN);
+
+    //  장소 검색 결과를 받아오기 위한 런처 선언
+    private ActivityResultLauncher<Intent> placeSearchLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,10 +74,6 @@ public class PostTravelSettingActivity extends AppCompatActivity {
         countryEditText = findViewById(R.id.etCountry);
         peopleChipGroup = findViewById(R.id.peopleChipGroup);
 
-        //기존 코드 부분
-        //findViewById(R.id.btnCloseSetting).setOnClickListener(v -> openSearchScreen());
-
-        // ✨ [내가 추가한 코드] 닫기(X) 버튼
         findViewById(R.id.btnCloseSetting).setOnClickListener(v -> {
             if (getCallingActivity() != null) {
                 finish();
@@ -80,14 +82,9 @@ public class PostTravelSettingActivity extends AppCompatActivity {
             }
         });
 
-        //원래 있던 기존 코드 부분
         findViewById(R.id.btnSaveDate).setOnClickListener(v ->
                 Toast.makeText(this, selectedDateRange.getText().toString(), Toast.LENGTH_SHORT).show());
 
-        // 기존 코드 부분
-        // findViewById(R.id.btnApplySetting).setOnClickListener(v -> openSearchScreen());
-
-        // ✨ [내가 추가한 코드] 적용 버튼
         findViewById(R.id.btnApplySetting).setOnClickListener(v -> {
             if (getCallingActivity() != null) {
                 Intent resultIntent = new Intent();
@@ -101,28 +98,47 @@ public class PostTravelSettingActivity extends AppCompatActivity {
             }
         });
 
-        //여기서부터 기존 코드 부분
-        Button btnSaveCountry = findViewById(R.id.btnSaveCountry);
-        ImageButton btnCountrySearch = findViewById(R.id.btnCountrySearch);
-        View.OnClickListener saveCountry = v -> saveCountry();
-        btnSaveCountry.setOnClickListener(saveCountry);
-        btnCountrySearch.setOnClickListener(saveCountry);
-        countryEditText.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                saveCountry();
-                return true;
-            }
-            return false;
-        });
+        // ====================================================================
+        // 장소 검색 기능 연동
+        // ====================================================================
+
+        // 1. 장소 검색 화면에서 선택한 데이터를 받아와서 텍스트창에 넣어줍니다.
+        placeSearchLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        String placeName = result.getData().getStringExtra("selectedPlaceName");
+                        if (placeName != null) {
+                            countryEditText.setText(placeName); // 선택한 장소 이름 세팅
+                        }
+                    }
+                }
+        );
+
+        // 2. 검색창이나 돋보기 아이콘을 누르면 장소 검색 화면을 엽니다. (isPickingMode 전달)
+        View.OnClickListener openPlaceSearch = v -> {
+            Intent intent = new Intent(this, PlaceSearchActivity.class);
+            intent.putExtra("isPickingMode", true);
+            placeSearchLauncher.launch(intent);
+        };
+
+        countryEditText.setOnClickListener(openPlaceSearch);
+        findViewById(R.id.btnCountrySearch).setOnClickListener(openPlaceSearch);
+
+        // 3. '저장' 버튼을 눌렀을 때 비로소 변수에 저장합니다.
+        findViewById(R.id.btnSaveCountry).setOnClickListener(v -> saveCountry());
+
+        // ====================================================================
 
         setupSpinners();
         setupPeopleChips();
         setupBottomNavigation();
         updateSelectedDateRange();
         drawCalendar();
-        countryEditText.clearFocus();
         findViewById(R.id.btnDateSetting).requestFocus();
     }
+
+    // ... (기존 캘린더 로직들은 변경 없이 그대로 유지됩니다) ...
 
     private void setupSpinners() {
         Calendar today = Calendar.getInstance();
@@ -234,9 +250,9 @@ public class PostTravelSettingActivity extends AppCompatActivity {
     private void saveCountry() {
         savedCountry = countryEditText.getText().toString().trim();
         if (savedCountry.isEmpty()) {
-            Toast.makeText(this, "나라 또는 도시를 입력해주세요.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "장소를 선택해주세요.", Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, savedCountry + " 저장", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, savedCountry + " 저장 완료", Toast.LENGTH_SHORT).show();
         }
     }
 

@@ -1,13 +1,17 @@
 package com.example.pinit.fragment;
 
+import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -47,7 +51,65 @@ public class PostDetailFragment extends Fragment {
 
         layoutPlacesList = view.findViewById(R.id.layoutPlacesList);
         btnShowMore = view.findViewById(R.id.btnShowMore);
+        // onCreateView 내부에서 뷰(View)가 inflate된 직후 아래 코드들을 붙여넣으세요.
 
+// 1. 일정 담기 기능 (토스트 팝업)
+        Button btnSaveAllSchedule = view.findViewById(R.id.btnSaveAllSchedule);
+        Button btnSaveDay1Schedule = view.findViewById(R.id.btnSaveDay1Schedule);
+        Button btnSaveDay2Schedule = view.findViewById(R.id.btnSaveDay2Schedule);
+
+        View.OnClickListener saveScheduleListener = v -> {
+            Toast.makeText(getContext(), "일정이 내 여행에 담겼습니다!", Toast.LENGTH_SHORT).show();
+        };
+
+        if (btnSaveAllSchedule != null) btnSaveAllSchedule.setOnClickListener(saveScheduleListener);
+        if (btnSaveDay1Schedule != null) btnSaveDay1Schedule.setOnClickListener(saveScheduleListener);
+        if (btnSaveDay2Schedule != null) btnSaveDay2Schedule.setOnClickListener(saveScheduleListener);
+
+
+// 2. 하단 액션바 기능 (공유, 댓글, 스크랩)
+        ImageView btnActionShare = view.findViewById(R.id.btnActionShare);
+        ImageView btnActionComment = view.findViewById(R.id.btnActionComment);
+        ImageView btnActionScrap = view.findViewById(R.id.btnActionScrap);
+
+// [공유 기능]: 안드로이드 기본 인텐트를 호출하여 카톡, 인스타 등으로 보냅니다.
+        if (btnActionShare != null) {
+            btnActionShare.setOnClickListener(v -> {
+                Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                shareIntent.setType("text/plain");
+                // 공유될 때 넘어가는 텍스트 문구
+                shareIntent.putExtra(Intent.EXTRA_TEXT, "[Pin It] 1박 2일 상하이 여행기\n아래 링크에서 확인해보세요!");
+
+                Intent chooser = Intent.createChooser(shareIntent, "게시물 공유하기");
+                startActivity(chooser);
+            });
+        }
+
+// [댓글 기능]: 새롭게 만든 댓글 바텀시트를 띄웁니다.
+        if (btnActionComment != null) {
+            btnActionComment.setOnClickListener(v -> {
+                CommentBottomSheetFragment commentSheet = new CommentBottomSheetFragment();
+                commentSheet.show(getChildFragmentManager(), "CommentBottomSheet");
+            });
+        }
+
+// [스크랩 기능]: 클릭 시 토스트를 띄우고, 아이콘 색상을 포인트 색상(예: 노란색)으로 바꿉니다.
+        if (btnActionScrap != null) {
+            // 스크랩 상태를 저장할 임시 변수 (실제 앱에서는 DB와 연동 필요)
+            final boolean[] isScraped = {false};
+
+            btnActionScrap.setOnClickListener(v -> {
+                isScraped[0] = !isScraped[0]; // 상태 뒤집기
+
+                if (isScraped[0]) {
+                    Toast.makeText(getContext(), "스크랩 완료!", Toast.LENGTH_SHORT).show();
+                    btnActionScrap.setColorFilter(0xFFFFD54F); // 노란색(또는 테마색)으로 틴트 변경
+                } else {
+                    Toast.makeText(getContext(), "스크랩이 취소되었습니다.", Toast.LENGTH_SHORT).show();
+                    btnActionScrap.setColorFilter(0xFF888888); // 원래 회색으로 복구
+                }
+            });
+        }
         view.findViewById(R.id.btnBack).setOnClickListener(v -> {
             // 백스택(이전 화면들 모아둔 상자)에서 현재 화면을 빼고 이전으로 돌아가라!
             getParentFragmentManager().popBackStack();
