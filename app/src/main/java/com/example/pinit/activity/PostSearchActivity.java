@@ -5,9 +5,9 @@ import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
-import android.widget.HorizontalScrollView;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
@@ -24,19 +24,19 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class PostSearchActivity extends AppCompatActivity {
 
     public static final String EXTRA_SEARCH_QUERY = "post_search_query";
+    public static final String EXTRA_TRAVEL_SETTINGS = "travel_settings";
 
     private EditText searchEditText;
-
-    // 기존 해시태그용 변수
     private HorizontalScrollView selectedTagScroller;
     private ChipGroup selectedTagContainer;
     private final Set<String> selectedTags = new LinkedHashSet<>();
 
-    // 여행설정 태그용 변수
     private HorizontalScrollView travelSettingTagScroller;
     private ChipGroup travelSettingTagContainer;
     private final List<String> travelSettingTags = new ArrayList<>();
@@ -67,47 +67,34 @@ public class PostSearchActivity extends AppCompatActivity {
         searchEditText = findViewById(R.id.postSearchEditText);
         selectedTagScroller = findViewById(R.id.selectedTagScroller);
         selectedTagContainer = findViewById(R.id.selectedTagContainer);
-
-        // 새로 추가된 XML 아이디 연결
         travelSettingTagScroller = findViewById(R.id.travelSettingTagScroller);
         travelSettingTagContainer = findViewById(R.id.travelSettingTagContainer);
-
         ImageButton btnRunPostSearch = findViewById(R.id.btnRunPostSearch);
 
-        // 여행 설정 화면 런처
         travelSettingLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                         Intent data = result.getData();
-                        String date = data.getStringExtra("selectedDate");
-                        String country = data.getStringExtra("selectedCountry");
-                        String people = data.getStringExtra("selectedPeople");
-
-                        // 기존 여행설정 태그 초기화 후 새로 담기
                         travelSettingTags.clear();
-                        if (date != null && !date.trim().isEmpty() && !date.equals("날짜를 선택하세요")) {
-                            travelSettingTags.add(date);
-                        }
-                        if (country != null && !country.trim().isEmpty()) {
-                            travelSettingTags.add(country);
-                        }
-                        if (people != null && !people.trim().isEmpty()) {
-                            travelSettingTags.add(people);
-                        }
-
+                        addTravelSettingTag(data.getStringExtra("selectedDate"));
+                        addTravelSettingTag(data.getStringExtra("selectedCountry"));
+                        addTravelSettingTag(data.getStringExtra("selectedPeople"));
                         renderTravelSettingTags();
                     }
                 }
         );
 
+        restoreTravelSettings(getIntent());
         setInitialQuery(getIntent().getStringExtra(EXTRA_SEARCH_QUERY));
+        renderTravelSettingTags();
 
         addTags(findViewById(R.id.tagContainerTogether), togetherTags);
         addTags(findViewById(R.id.tagContainerDuration), durationTags);
         addTags(findViewById(R.id.tagContainerTheme), themeTags);
 
         findViewById(R.id.btnTravelSetting).setOnClickListener(v -> openTravelSetting());
+        findViewById(R.id.btnOpenMyPage).setOnClickListener(v -> openMyPage());
 
         btnRunPostSearch.setOnClickListener(v -> openSearchResults());
         searchEditText.setOnEditorActionListener((v, actionId, event) -> {
@@ -126,6 +113,36 @@ public class PostSearchActivity extends AppCompatActivity {
         });
     }
 
+    private void restoreTravelSettings(Intent intent) {
+        ArrayList<String> settings = intent.getStringArrayListExtra(EXTRA_TRAVEL_SETTINGS);
+        if (settings != null) {
+            for (String setting : settings) {
+                addTravelSettingTag(setting);
+            }
+        }
+
+        String startDate = intent.getStringExtra(PostTravelSettingActivity.EXTRA_START_DATE);
+        String endDate = intent.getStringExtra(PostTravelSettingActivity.EXTRA_END_DATE);
+        if (startDate != null && endDate != null) {
+            addTravelSettingTag(startDate + " ~ " + endDate);
+        } else {
+            addTravelSettingTag(startDate);
+        }
+        addTravelSettingTag(intent.getStringExtra(PostTravelSettingActivity.EXTRA_COUNTRY));
+        addTravelSettingTag(intent.getStringExtra(PostTravelSettingActivity.EXTRA_PEOPLE));
+    }
+
+    private void addTravelSettingTag(String tag) {
+        if (tag == null) return;
+
+        String trimmed = tag.trim();
+        if (trimmed.isEmpty() || trimmed.contains("선택")) return;
+
+        if (!travelSettingTags.contains(trimmed)) {
+            travelSettingTags.add(trimmed);
+        }
+    }
+
     private void renderTravelSettingTags() {
         travelSettingTagContainer.removeAllViews();
 
@@ -134,11 +151,9 @@ public class PostSearchActivity extends AppCompatActivity {
             chip.setText(tag);
             chip.setTextColor(Color.rgb(34, 34, 34));
             chip.setTextSize(14);
-
             chip.setChipBackgroundColor(ColorStateList.valueOf(Color.WHITE));
             chip.setChipStrokeColor(ColorStateList.valueOf(Color.rgb(221, 221, 221)));
             chip.setChipStrokeWidth(1);
-
             chip.setCloseIconVisible(true);
             chip.setCloseIconTint(ColorStateList.valueOf(Color.rgb(120, 100, 70)));
             chip.setOnCloseIconClickListener(v -> {
@@ -156,11 +171,7 @@ public class PostSearchActivity extends AppCompatActivity {
 
         for (String tag : selectedTags) {
             Chip chip = baseChip();
-            if (tag.startsWith("#")) {
-                chip.setText(tag);
-            } else {
-                chip.setText("#" + tag);
-            }
+            chip.setText(tag.startsWith("#") ? tag : "#" + tag);
             chip.setCloseIconVisible(true);
             chip.setCloseIconTint(ColorStateList.valueOf(Color.rgb(120, 100, 70)));
             chip.setOnCloseIconClickListener(v -> {
@@ -174,7 +185,7 @@ public class PostSearchActivity extends AppCompatActivity {
     }
 
     private void setInitialQuery(String incomingQuery) {
-        String visibleQuery = incomingQuery == null ? "" : incomingQuery.trim();
+        String visibleQuery = moveTravelSettingsOutOfQuery(incomingQuery == null ? "" : incomingQuery.trim());
         for (String tag : collectKnownTags()) {
             if (visibleQuery.contains(tag)) {
                 selectedTags.add(tag);
@@ -185,6 +196,27 @@ public class PostSearchActivity extends AppCompatActivity {
         searchEditText.setText(visibleQuery);
         searchEditText.setSelection(searchEditText.length());
         renderSelectedTags();
+    }
+
+    private String moveTravelSettingsOutOfQuery(String query) {
+        String withoutDate = moveMatchesToTravelSettings(
+                query,
+                Pattern.compile("\\d{4}/\\d{2}/\\d{2}\\s*~\\s*\\d{4}/\\d{2}/\\d{2}")
+        );
+        return moveMatchesToTravelSettings(withoutDate, Pattern.compile("\\d+~\\d+명|\\d+명"));
+    }
+
+    private String moveMatchesToTravelSettings(String query, Pattern pattern) {
+        Matcher matcher = pattern.matcher(query);
+        StringBuffer buffer = new StringBuffer();
+
+        while (matcher.find()) {
+            addTravelSettingTag(matcher.group());
+            matcher.appendReplacement(buffer, Matcher.quoteReplacement(" "));
+        }
+
+        matcher.appendTail(buffer);
+        return buffer.toString();
     }
 
     private List<String> collectKnownTags() {
@@ -231,7 +263,6 @@ public class PostSearchActivity extends AppCompatActivity {
         return chip;
     }
 
-    //  일반 해시태그와 입력된 텍스트만 문자열로 만듭니다. (여행 설정 태그는 제외됨)
     private String buildSearchQuery() {
         String typedQuery = searchEditText.getText().toString().trim();
         StringBuilder queryBuilder = new StringBuilder(typedQuery);
@@ -244,11 +275,9 @@ public class PostSearchActivity extends AppCompatActivity {
         return queryBuilder.toString().trim();
     }
 
-    // 일반 검색어와 여행 설정 데이터를 따로따로 분리해서 전송합니다.
     private void openSearchResults() {
         String query = buildSearchQuery();
 
-        // 둘 다 비어있을 때만 막도록 조건을 수정했습니다. (장소만 선택하고 검색해도 검색되도록)
         if (query.isEmpty() && travelSettingTags.isEmpty()) {
             Toast.makeText(this, "검색어 또는 여행 설정을 입력해주세요.", Toast.LENGTH_SHORT).show();
             return;
@@ -256,13 +285,8 @@ public class PostSearchActivity extends AppCompatActivity {
 
         Intent intent = new Intent(this, MainActivity.class);
         intent.putExtra("selected_nav", R.id.nav_community);
-
-        // 1. 일반 검색어 텍스트 전송
         intent.putExtra(EXTRA_SEARCH_QUERY, query);
-
-        // 2. 여행 설정 태그(리스트) 별도 전송
-        intent.putStringArrayListExtra("travel_settings", new ArrayList<>(travelSettingTags));
-
+        intent.putStringArrayListExtra(EXTRA_TRAVEL_SETTINGS, new ArrayList<>(travelSettingTags));
         startActivity(intent);
         finish();
     }
@@ -270,7 +294,15 @@ public class PostSearchActivity extends AppCompatActivity {
     private void openTravelSetting() {
         Intent intent = new Intent(this, PostTravelSettingActivity.class);
         intent.putExtra(EXTRA_SEARCH_QUERY, buildSearchQuery());
+        intent.putStringArrayListExtra(EXTRA_TRAVEL_SETTINGS, new ArrayList<>(travelSettingTags));
         travelSettingLauncher.launch(intent);
+    }
+
+    private void openMyPage() {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra(MainActivity.EXTRA_OPEN_MY_PAGE, true);
+        startActivity(intent);
+        finish();
     }
 
     private void openMainTab(int navId) {

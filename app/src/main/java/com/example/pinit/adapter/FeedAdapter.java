@@ -11,6 +11,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
+import com.example.pinit.fragment.OtherMyPageFragment;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
@@ -69,6 +70,9 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
         holder.userName.setText(post.userName);
         holder.postTitle.setText(post.title);
         holder.tagGroup.removeAllViews();
+        View.OnClickListener profileClickListener = v -> openOtherProfile(v, post.userName);
+        holder.profileImage.setOnClickListener(profileClickListener);
+        holder.userName.setOnClickListener(profileClickListener);
 
         for (String tag : post.tags) {
             Chip chip = new Chip(holder.itemView.getContext());
@@ -124,7 +128,17 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
         return tags;
     }
 
+    private void openOtherProfile(View view, String userName) {
+        androidx.appcompat.app.AppCompatActivity activity =
+                (androidx.appcompat.app.AppCompatActivity) view.getContext();
+        activity.getSupportFragmentManager().beginTransaction()
+                .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance(userName))
+                .addToBackStack(null)
+                .commit();
+    }
+
     public static class ViewHolder extends RecyclerView.ViewHolder {
+        View profileImage;
         TextView userName;
         TextView postTitle;
         ChipGroup tagGroup;
@@ -137,6 +151,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
+            profileImage = itemView.findViewById(R.id.profileImage);
             userName = itemView.findViewById(R.id.userName);
             postTitle = itemView.findViewById(R.id.postTitle);
             tagGroup = itemView.findViewById(R.id.postTagGroup);

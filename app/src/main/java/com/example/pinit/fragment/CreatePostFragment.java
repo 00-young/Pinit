@@ -15,6 +15,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 
@@ -258,6 +259,7 @@ public class CreatePostFragment extends Fragment {
         layoutImportedBudget = view.findViewById(R.id.layoutImportedBudget);
         layoutTagsContainer = view.findViewById(R.id.layoutTagsContainer);
         ivSelectedPhoto = view.findViewById(R.id.ivSelectedPhoto);
+        bindHeaderMyPageButton(view);
 
         tvTotalBudget = view.findViewById(R.id.tvTotalBudget);
         etBudgetAccom = view.findViewById(R.id.etBudgetAccom);
@@ -322,6 +324,24 @@ public class CreatePostFragment extends Fragment {
         });
 
         return view;
+    }
+
+    private void bindHeaderMyPageButton(View rootView) {
+        if (!(rootView instanceof LinearLayout)) return;
+
+        LinearLayout rootLayout = (LinearLayout) rootView;
+        if (rootLayout.getChildCount() == 0 || !(rootLayout.getChildAt(0) instanceof RelativeLayout)) return;
+
+        RelativeLayout headerLayout = (RelativeLayout) rootLayout.getChildAt(0);
+        if (headerLayout.getChildCount() == 0) return;
+
+        View headerAction = headerLayout.getChildAt(headerLayout.getChildCount() - 1);
+        headerAction.setClickable(true);
+        headerAction.setFocusable(true);
+        headerAction.setOnClickListener(v -> getParentFragmentManager().beginTransaction()
+                .replace(R.id.fragmentContainer, new MyPageFragment())
+                .addToBackStack(null)
+                .commit());
     }
 
     // 🌟 요구사항 1: 예산 합산 로직 함수
