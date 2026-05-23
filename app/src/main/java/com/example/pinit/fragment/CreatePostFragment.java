@@ -390,7 +390,7 @@ public class CreatePostFragment extends Fragment {
             bottomSheet.show(getParentFragmentManager(), "TagBottomSheet");
         });
 
-        view.findViewById(R.id.ivMenuCamera).setOnClickListener(v -> {
+        view.findViewById(R.id.ivMenuPhoto).setOnClickListener(v -> {
             Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
             galleryLauncher.launch(intent);
         });
