@@ -32,6 +32,8 @@ import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.example.pinit.database.FirestoreRepository;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -124,10 +126,12 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         rvSchedule.setAdapter(scheduleAdapter);
 
         findViewById(R.id.btnAddSchedule).setOnClickListener(v -> openAddSchedule());
+        /*
         findViewById(R.id.btnUploadFirestore)
                 .setOnClickListener(v -> {
                     uploadScheduleToFirestore();
                 });
+         */
         findViewById(R.id.btnAddScheduleEmpty).setOnClickListener(v -> openAddSchedule());
 
         SupportMapFragment mapFragment = (SupportMapFragment)
@@ -548,7 +552,7 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         intent.putExtra("default_date", selectedDate);
         startActivityForResult(intent, REQUEST_ADD_SCHEDULE);
     }
-
+    /*
     private void uploadScheduleToFirestore() {
 
         FirestoreRepository repository =
@@ -556,9 +560,15 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
         String scheduleId = String.valueOf(tripId);
 
-        // TODO:
-        // 나중에 FirebaseAuth uid 연결
-        String userId = "user1";
+        FirebaseUser user =
+                FirebaseAuth.getInstance()
+                        .getCurrentUser();
+
+        String userId = "";
+
+        if (user != null) {
+            userId = user.getUid();
+        }
 
         repository.uploadSchedule(
                 scheduleId,
@@ -606,7 +616,7 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
                 Toast.LENGTH_SHORT
         ).show();
     }
-
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);

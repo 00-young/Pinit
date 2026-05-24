@@ -115,7 +115,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         v.put("google_place_id", s.getGooglePlaceId());
         v.put("category", s.getCategory());
         long id = db.insert("schedules", null, v);
-        db.close(); return id;
+        db.close();
+        return id;
     }
 
     public List<Schedule> getSchedulesByTrip(int tripId) {
