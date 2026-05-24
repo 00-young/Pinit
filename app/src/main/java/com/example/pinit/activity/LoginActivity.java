@@ -12,6 +12,8 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.pinit.R;
+import com.example.pinit.manager.FirebaseManager;
+import com.example.pinit.model.User;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
@@ -46,10 +48,11 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        FirebaseUser currentUser = mAuth.getCurrentUser();
+       /* FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser != null) {
             goToMain();
         }
+        */
     }
 
     // 이메일/비밀번호로 Firebase 로그인 시도
@@ -106,14 +109,41 @@ public class LoginActivity extends AppCompatActivity {
 
         mAuth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(task -> {
-                    progressBar.setVisibility(View.GONE);
-                    btnLogin.setEnabled(true);
-                    btnRegister.setEnabled(true);
-
                     if (task.isSuccessful()) {
-                        Toast.makeText(this, "회원가입 완료! 로그인합니다.", Toast.LENGTH_SHORT).show();
-                        goToMain();
+                        FirebaseUser firebaseUser = mAuth.getCurrentUser();
+                        if (firebaseUser != null) {
+                            User newUser = new User();
+                            newUser.setEmail(firebaseUser.getEmail());
+                            // Nickname will be handled inside FirebaseManager.createNewUser
+
+                            FirebaseManager.getInstance().createNewUser(newUser, new FirebaseManager.OnActionListener() {
+                                @Override
+                                public void onSuccess() {
+                                    progressBar.setVisibility(View.GONE);
+                                    btnLogin.setEnabled(true);
+                                    btnRegister.setEnabled(true);
+                                    Toast.makeText(LoginActivity.this, "회원가입 완료! 로그인합니다.", Toast.LENGTH_SHORT).show();
+                                    goToMain();
+                                }
+
+                                @Override
+                                public void onFailure(Exception e) {
+                                    progressBar.setVisibility(View.GONE);
+                                    btnLogin.setEnabled(true);
+                                    btnRegister.setEnabled(true);
+                                    
+                                    // If Firestore fails, delete the Auth account to avoid "ghost" accounts
+                                    firebaseUser.delete();
+                                    
+                                    String msg = e != null ? e.getMessage() : "DB 생성 실패";
+                                    Toast.makeText(LoginActivity.this, "회원가입 실패 (DB): " + msg, Toast.LENGTH_LONG).show();
+                                }
+                            });
+                        }
                     } else {
+                        progressBar.setVisibility(View.GONE);
+                        btnLogin.setEnabled(true);
+                        btnRegister.setEnabled(true);
                         String msg = task.getException() != null
                                 ? task.getException().getMessage() : "회원가입 실패";
                         Toast.makeText(this, "회원가입 실패: " + msg, Toast.LENGTH_LONG).show();
