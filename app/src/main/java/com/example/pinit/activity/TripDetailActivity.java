@@ -288,6 +288,21 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         for (Schedule s : allSchedules) {
             if (date.equals(s.getDate())) filtered.add(s);
         }
+        filtered.sort((a, b) -> {
+            String ta = a.getTime() == null ? "" : a.getTime();
+            String tb = b.getTime() == null ? "" : b.getTime();
+            String[] pa = ta.split(":");
+            String[] pb = tb.split(":");
+            try {
+                int ha = pa.length > 0 ? Integer.parseInt(pa[0]) : 0;
+                int ma = pa.length > 1 ? Integer.parseInt(pa[1]) : 0;
+                int hb = pb.length > 0 ? Integer.parseInt(pb[0]) : 0;
+                int mb = pb.length > 1 ? Integer.parseInt(pb[1]) : 0;
+                return ha != hb ? ha - hb : ma - mb;
+            } catch (NumberFormatException e) {
+                return ta.compareTo(tb);
+            }
+        });
 
         currentSchedules = filtered;
 
