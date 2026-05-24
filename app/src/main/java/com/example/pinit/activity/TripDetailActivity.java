@@ -22,6 +22,8 @@ import com.example.pinit.adapter.ScheduleDetailAdapter;
 import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.Schedule;
 import com.example.pinit.model.Trip;
+// 추가
+import com.example.pinit.database.FirestoreRepository;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -39,8 +41,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -99,6 +103,11 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
         findViewById(R.id.btnAddSchedule).setOnClickListener(v -> openAddSchedule());
         findViewById(R.id.btnAddScheduleEmpty).setOnClickListener(v -> openAddSchedule());
+        // 임시 버튼
+        findViewById(R.id.btnUploadFirestore)
+                .setOnClickListener(v -> {
+                    uploadScheduleToFirestore();
+                });
 
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getSupportFragmentManager().findFragmentById(R.id.mapView);
@@ -229,39 +238,68 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
     // ========== 지도 핀 표시 ==========
 
     private void showPinsForSchedules(List<Schedule> schedules) {
+
+        if (googleMap == null) return;
+
         googleMap.clear();
+
         if (schedules.isEmpty()) return;
 
         List<LatLng> resultPositions = new ArrayList<>();
-        int[] done = {0};
-        int total = schedules.size();
+
+        // 중복 장소 제거용
+        List<String> uniqueQueries = new ArrayList<>();
 
         for (Schedule s : schedules) {
-            String query = (s.getPlaceName() != null && !s.getPlaceName().isEmpty())
-                    ? s.getPlaceName() : s.getTitle();
 
-            if (query == null || query.isEmpty()) {
-                done[0]++;
-                if (done[0] == total) fitCameraToPins(resultPositions);
-                continue;
+            String query =
+                    (s.getPlaceName() != null && !s.getPlaceName().isEmpty())
+                            ? s.getPlaceName()
+                            : s.getTitle();
+
+            if (query != null
+                    && !query.isEmpty()
+                    && !uniqueQueries.contains(query)) {
+
+                uniqueQueries.add(query);
             }
+        }
 
-            final String title = s.getTitle();
-            final String snippet = query;
-            geocode(query, latLng -> {
-                runOnUiThread(() -> {
-                    if (latLng != null && googleMap != null) {
-                        googleMap.addMarker(new MarkerOptions()
-                                .position(latLng)
-                                .title(title)
-                                .snippet(snippet)
-                                .icon(BitmapDescriptorFactory.defaultMarker(
-                                        BitmapDescriptorFactory.HUE_YELLOW)));
-                        resultPositions.add(latLng);
-                    }
-                    done[0]++;
-                    if (done[0] == total) fitCameraToPins(resultPositions);
-                });
+        int total = uniqueQueries.size();
+
+        if (total == 0) return;
+
+        int[] done = {0};
+
+        for (String query : uniqueQueries) {
+
+            geocode(query, new GeocodeCallback() {
+                @Override
+                public void onResult(LatLng latLng) {
+
+                    runOnUiThread(() -> {
+
+                        if (latLng != null && googleMap != null) {
+
+                            googleMap.addMarker(
+                                    new MarkerOptions()
+                                            .position(latLng)
+                                            .title(query)
+                                            .snippet(query)
+                                            .icon(BitmapDescriptorFactory.defaultMarker(
+                                                    BitmapDescriptorFactory.HUE_YELLOW))
+                            );
+
+                            resultPositions.add(latLng);
+                        }
+
+                        done[0]++;
+
+                        if (done[0] == total) {
+                            fitCameraToPins(resultPositions);
+                        }
+                    });
+                }
             });
         }
     }
@@ -430,6 +468,85 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
             buildDateTabs();
             loadSchedulesForDate(selectedDate);
         }
+    }
+
+    private void uploadScheduleToFirestore() {
+
+        if (trip == null) return;
+
+        FirestoreRepository repository =
+                new FirestoreRepository();
+
+        double totalBudget = trip.getBudget();
+
+        String firestoreScheduleId =
+                String.valueOf(trip.getId());
+
+        // 임시
+        String userId = "user1";
+
+        // SQLite의 destination을 city로 사용
+        String city = trip.getDestination();
+
+        // 일단 기본 국가
+        String country = "한국";
+
+
+        // 추후 여행 인원 기능 추가 예정
+        int travelerCount = 1;
+
+        // =========================
+        // 상위 schedules 업로드
+        // =========================
+
+        repository.uploadSchedule(
+                firestoreScheduleId,
+                userId,
+                trip.getTitle(),
+                country,
+                city,
+                travelerCount,
+                totalBudget,
+                trip.getStartDate(),
+                trip.getEndDate()
+        );
+
+        // =========================
+        // SQLite 일정들 가져오기
+        // =========================
+
+        List<Schedule> allSchedules =
+                dbHelper.getSchedulesByTrip(tripId);
+
+        // =========================
+        // 일정 반복 업로드
+        // =========================
+
+        for (int i = 0; i < allSchedules.size(); i++) {
+
+            Schedule schedule =
+                    allSchedules.get(i);
+
+            String dayId = schedule.getDate();
+
+            repository.uploadDay(
+                    firestoreScheduleId,
+                    dayId,
+                    i + 1,
+                    schedule.getDate()
+            );
+
+            repository.uploadItem(
+                    firestoreScheduleId,
+                    dayId,
+                    "item" + (i + 1),
+                    schedule
+            );
+        }
+
+        Toast.makeText(this,
+                "커뮤니티 등록 완료",
+                Toast.LENGTH_SHORT).show();
     }
 
     @Override
