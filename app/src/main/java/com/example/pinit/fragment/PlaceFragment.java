@@ -263,6 +263,29 @@ public class PlaceFragment extends Fragment {
         schedule.setTripId(trip.getId());
         schedule.setTitle(place.getOrDefault("name", ""));
         schedule.setPlaceName(place.getOrDefault("address", ""));
+        // ===== 좌표 추출 =====
+        double lat = 0;
+        double lng = 0;
+
+        try {
+            lat = Double.parseDouble(
+                    place.getOrDefault("lat", "0")
+            );
+
+            lng = Double.parseDouble(
+                    place.getOrDefault("lng", "0")
+            );
+
+        } catch (Exception ignored) {}
+        schedule.setLatitude(lat);
+        schedule.setLongitude(lng);
+        // ===== placeId / category =====
+        schedule.setGooglePlaceId(
+                place.getOrDefault("place_id", "")
+        );
+        schedule.setCategory(
+                place.getOrDefault("types", "")
+        );
         schedule.setDate(date);
         schedule.setTime(time);
         schedule.setMemo(place.getOrDefault("rating", "").isEmpty() ? "" : place.get("rating") + "점");

@@ -31,6 +31,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.example.pinit.database.FirestoreRepository;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -123,6 +124,10 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         rvSchedule.setAdapter(scheduleAdapter);
 
         findViewById(R.id.btnAddSchedule).setOnClickListener(v -> openAddSchedule());
+        findViewById(R.id.btnUploadFirestore)
+                .setOnClickListener(v -> {
+                    uploadScheduleToFirestore();
+                });
         findViewById(R.id.btnAddScheduleEmpty).setOnClickListener(v -> openAddSchedule());
 
         SupportMapFragment mapFragment = (SupportMapFragment)
@@ -542,6 +547,64 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         intent.putExtra("trip_id", tripId);
         intent.putExtra("default_date", selectedDate);
         startActivityForResult(intent, REQUEST_ADD_SCHEDULE);
+    }
+
+    private void uploadScheduleToFirestore() {
+
+        FirestoreRepository repository =
+                new FirestoreRepository();
+
+        String scheduleId = String.valueOf(tripId);
+
+        // TODO:
+        // 나중에 FirebaseAuth uid 연결
+        String userId = "user1";
+
+        repository.uploadSchedule(
+                scheduleId,
+                userId,
+                trip.getTitle(),
+                "한국",
+                trip.getDestination(),
+                1,
+                trip.getBudget(),
+                trip.getStartDate(),
+                trip.getEndDate()
+        );
+
+        List<Schedule> schedules =
+                dbHelper.getSchedulesByTrip(tripId);
+
+        for (Schedule s : schedules) {
+
+            String dayId = s.getDate();
+
+            int dayNumber =
+                    dateList.indexOf(s.getDate()) + 1;
+
+            repository.uploadDay(
+                    scheduleId,
+                    dayId,
+                    dayNumber,
+                    s.getDate()
+            );
+
+            String itemId =
+                    "item" + s.getId();
+
+            repository.uploadItem(
+                    scheduleId,
+                    dayId,
+                    itemId,
+                    s
+            );
+        }
+
+        Toast.makeText(
+                this,
+                "Firestore 업로드 완료",
+                Toast.LENGTH_SHORT
+        ).show();
     }
 
     @Override
