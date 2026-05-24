@@ -17,6 +17,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.example.pinit.R;
+import com.example.pinit.data.MyScrap;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
@@ -95,11 +96,14 @@ public class PostDetailFragment extends Fragment {
 
 // [스크랩 기능]: 클릭 시 토스트를 띄우고, 아이콘 색상을 포인트 색상(예: 노란색)으로 바꿉니다.
         if (btnActionScrap != null) {
-            // 스크랩 상태를 저장할 임시 변수 (실제 앱에서는 DB와 연동 필요)
-            final boolean[] isScraped = {false};
+            final boolean[] isScraped = {
+                    MyScrap.isScraped(requireContext(), MyScrap.POST_ID_SHANGHAI)
+            };
+            btnActionScrap.setColorFilter(isScraped[0] ? 0xFFFFD54F : 0xFF888888);
 
             btnActionScrap.setOnClickListener(v -> {
                 isScraped[0] = !isScraped[0]; // 상태 뒤집기
+                MyScrap.setScraped(requireContext(), MyScrap.POST_ID_SHANGHAI, isScraped[0]);
 
                 if (isScraped[0]) {
                     Toast.makeText(getContext(), "스크랩 완료!", Toast.LENGTH_SHORT).show();
@@ -118,6 +122,12 @@ public class PostDetailFragment extends Fragment {
         view.findViewById(R.id.btnOpenMyPage).setOnClickListener(v ->
                 getParentFragmentManager().beginTransaction()
                         .replace(R.id.fragmentContainer, new MyPageFragment())
+                        .addToBackStack(null)
+                        .commit());
+
+        view.findViewById(R.id.authorProfileRow).setOnClickListener(v ->
+                getParentFragmentManager().beginTransaction()
+                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance("\uD138\uD138\uD55C \uBCF5\uC22D\uC544"))
                         .addToBackStack(null)
                         .commit());
 

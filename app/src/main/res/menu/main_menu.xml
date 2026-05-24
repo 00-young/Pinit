@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MainActivity 툴바 우상단 옵션 메뉴
+     showAsAction="never" → 점 세 개(⋮) 버튼 안에 숨김 표시 -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Firebase signOut() 호출 후 LoginActivity로 이동 -->
+    <item
+        android:id="@+id/action_logout"
+        android:title="로그아웃"
+        app:showAsAction="never" />
+</menu>

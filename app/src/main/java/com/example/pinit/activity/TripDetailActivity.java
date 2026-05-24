@@ -22,8 +22,6 @@ import com.example.pinit.adapter.ScheduleDetailAdapter;
 import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.Schedule;
 import com.example.pinit.model.Trip;
-// 추가
-import com.example.pinit.database.FirestoreRepository;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -32,6 +30,7 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.PolylineOptions;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -41,10 +40,8 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -89,25 +86,44 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         layoutEmpty = findViewById(R.id.layoutEmpty);
 
         rvSchedule.setLayoutManager(new LinearLayoutManager(this));
-        scheduleAdapter = new ScheduleDetailAdapter(this, new ArrayList<>(), schedule -> {
-            if (schedule.getPlaceName() != null && !schedule.getPlaceName().isEmpty()) {
-                Uri webUri = Uri.parse("https://maps.google.com/?q=" + Uri.encode(schedule.getPlaceName()));
-                startActivity(new Intent(Intent.ACTION_VIEW, webUri));
-            }
-        }, id -> {
-            dbHelper.deleteSchedule(id);
-            buildDateTabs();
-            loadSchedulesForDate(selectedDate);
-        });
+        scheduleAdapter = new ScheduleDetailAdapter(
+                this,
+                new ArrayList<>(),
+
+                // 지도 열기
+                schedule -> {
+
+                    if (schedule.getPlaceName() != null &&
+                            !schedule.getPlaceName().isEmpty()) {
+
+                        Uri webUri = Uri.parse(
+                                "https://maps.google.com/?q="
+                                        + Uri.encode(schedule.getPlaceName()));
+
+                        startActivity(
+                                new Intent(Intent.ACTION_VIEW, webUri));
+                    }
+                },
+
+                // 삭제
+                id -> {
+
+                    dbHelper.deleteSchedule(id);
+
+                    buildDateTabs();
+
+                    loadSchedulesForDate(selectedDate);
+                },
+
+                // 수정 기능 (임시)
+                schedule -> {
+                    // TODO: 일정 수정 기능 연결 예정
+                }
+        );
         rvSchedule.setAdapter(scheduleAdapter);
 
         findViewById(R.id.btnAddSchedule).setOnClickListener(v -> openAddSchedule());
         findViewById(R.id.btnAddScheduleEmpty).setOnClickListener(v -> openAddSchedule());
-        // 임시 버튼
-        findViewById(R.id.btnUploadFirestore)
-                .setOnClickListener(v -> {
-                    uploadScheduleToFirestore();
-                });
 
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getSupportFragmentManager().findFragmentById(R.id.mapView);
@@ -237,6 +253,9 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
     // ========== 지도 핀 표시 ==========
 
+    private final java.util.Map<String, LatLng> geocodeCache =
+            new java.util.HashMap<>();
+
     private void showPinsForSchedules(List<Schedule> schedules) {
 
         if (googleMap == null) return;
@@ -245,65 +264,104 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
         if (schedules.isEmpty()) return;
 
-        List<LatLng> resultPositions = new ArrayList<>();
+        int total = schedules.size();
 
-        // 중복 장소 제거용
-        List<String> uniqueQueries = new ArrayList<>();
+        LatLng[] orderedPositions = new LatLng[total];
 
-        for (Schedule s : schedules) {
+        int[] done = {0};
+
+        for (int i = 0; i < total; i++) {
+
+            Schedule s = schedules.get(i);
 
             String query =
                     (s.getPlaceName() != null && !s.getPlaceName().isEmpty())
                             ? s.getPlaceName()
                             : s.getTitle();
 
-            if (query != null
-                    && !query.isEmpty()
-                    && !uniqueQueries.contains(query)) {
+            if (query == null || query.isEmpty()) {
 
-                uniqueQueries.add(query);
+                done[0]++;
+
+                if (done[0] == total) {
+                    onAllGeocodeDone(orderedPositions);
+                }
+
+                continue;
             }
-        }
 
-        int total = uniqueQueries.size();
+            final int index = i;
 
-        if (total == 0) return;
+            final String markerTitle =
+                    (i + 1) + ". " + s.getTitle();
 
-        int[] done = {0};
+            final String snippet = query;
 
-        for (String query : uniqueQueries) {
+            // =========================
+            // cache 사용
+            // =========================
 
-            geocode(query, new GeocodeCallback() {
-                @Override
-                public void onResult(LatLng latLng) {
+            if (geocodeCache.containsKey(query)) {
+
+                LatLng cached = geocodeCache.get(query);
+
+                runOnUiThread(() -> {
+
+                    if (cached != null && googleMap != null) {
+
+                        orderedPositions[index] = cached;
+
+                        googleMap.addMarker(
+                                new MarkerOptions()
+                                        .position(cached)
+                                        .title(markerTitle)
+                                        .snippet(snippet)
+                                        .icon(BitmapDescriptorFactory.defaultMarker(
+                                                BitmapDescriptorFactory.HUE_YELLOW))
+                        );
+                    }
+
+                    done[0]++;
+
+                    if (done[0] == total) {
+                        onAllGeocodeDone(orderedPositions);
+                    }
+                });
+
+            } else {
+
+                geocode(query, latLng -> {
+
+                    if (latLng != null) {
+                        geocodeCache.put(query, latLng);
+                    }
 
                     runOnUiThread(() -> {
 
                         if (latLng != null && googleMap != null) {
 
+                            orderedPositions[index] = latLng;
+
                             googleMap.addMarker(
                                     new MarkerOptions()
                                             .position(latLng)
-                                            .title(query)
-                                            .snippet(query)
+                                            .title(markerTitle)
+                                            .snippet(snippet)
                                             .icon(BitmapDescriptorFactory.defaultMarker(
                                                     BitmapDescriptorFactory.HUE_YELLOW))
                             );
-
-                            resultPositions.add(latLng);
                         }
 
                         done[0]++;
 
                         if (done[0] == total) {
-                            fitCameraToPins(resultPositions);
+                            onAllGeocodeDone(orderedPositions);
                         }
                     });
-                }
-            });
+                });
+            }
         }
     }
-
     private void fitCameraToPins(List<LatLng> positions) {
         if (googleMap == null) return;
         if (positions.isEmpty()) {
@@ -318,6 +376,31 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
             for (LatLng pos : positions) builder.include(pos);
             googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 120));
         }
+    }
+
+    private void onAllGeocodeDone(LatLng[] orderedPositions) {
+
+        List<LatLng> validPositions = new ArrayList<>();
+
+        for (LatLng pos : orderedPositions) {
+
+            if (pos != null) {
+                validPositions.add(pos);
+            }
+        }
+
+        if (validPositions.size() >= 2) {
+
+            PolylineOptions polylineOptions =
+                    new PolylineOptions()
+                            .addAll(validPositions)
+                            .width(8f)
+                            .color(Color.parseColor("#FF9800"));
+
+            googleMap.addPolyline(polylineOptions);
+        }
+
+        fitCameraToPins(validPositions);
     }
 
     private void geocode(String address, GeocodeCallback callback) {
@@ -468,85 +551,6 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
             buildDateTabs();
             loadSchedulesForDate(selectedDate);
         }
-    }
-
-    private void uploadScheduleToFirestore() {
-
-        if (trip == null) return;
-
-        FirestoreRepository repository =
-                new FirestoreRepository();
-
-        double totalBudget = trip.getBudget();
-
-        String firestoreScheduleId =
-                String.valueOf(trip.getId());
-
-        // 임시
-        String userId = "user1";
-
-        // SQLite의 destination을 city로 사용
-        String city = trip.getDestination();
-
-        // 일단 기본 국가
-        String country = "한국";
-
-
-        // 추후 여행 인원 기능 추가 예정
-        int travelerCount = 1;
-
-        // =========================
-        // 상위 schedules 업로드
-        // =========================
-
-        repository.uploadSchedule(
-                firestoreScheduleId,
-                userId,
-                trip.getTitle(),
-                country,
-                city,
-                travelerCount,
-                totalBudget,
-                trip.getStartDate(),
-                trip.getEndDate()
-        );
-
-        // =========================
-        // SQLite 일정들 가져오기
-        // =========================
-
-        List<Schedule> allSchedules =
-                dbHelper.getSchedulesByTrip(tripId);
-
-        // =========================
-        // 일정 반복 업로드
-        // =========================
-
-        for (int i = 0; i < allSchedules.size(); i++) {
-
-            Schedule schedule =
-                    allSchedules.get(i);
-
-            String dayId = schedule.getDate();
-
-            repository.uploadDay(
-                    firestoreScheduleId,
-                    dayId,
-                    i + 1,
-                    schedule.getDate()
-            );
-
-            repository.uploadItem(
-                    firestoreScheduleId,
-                    dayId,
-                    "item" + (i + 1),
-                    schedule
-            );
-        }
-
-        Toast.makeText(this,
-                "커뮤니티 등록 완료",
-                Toast.LENGTH_SHORT).show();
     }
 
     @Override

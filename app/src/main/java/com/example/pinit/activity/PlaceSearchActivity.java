@@ -21,6 +21,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+// [화면] 장소 검색 전용 Activity (현재 직접 진입 경로는 없음)
+// PlaceFragment 내의 장소 검색 패널(panelSearch)과 기능이 중복됨
+// PlaceAdapter로 검색 결과를 RecyclerView에 표시, 항목 클릭 시 PlaceDetailActivity로 이동
 public class PlaceSearchActivity extends AppCompatActivity {
 
     private PlacesApiHelper apiHelper;
@@ -45,29 +48,18 @@ public class PlaceSearchActivity extends AppCompatActivity {
         RecyclerView recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-//        adapter = new PlaceAdapter(this, new ArrayList<>(), place -> {
-//            Intent intent = new Intent(this, PlaceDetailActivity.class);
-//            intent.putExtra("place_id", place.get("place_id"));
-//            intent.putExtra("place_name", place.get("name"));
-//            startActivity(intent);
-//        });
-        // 🌟 1. 글쓰기 화면에서 장소 '선택'을 위해 이 화면을 열었는지 확인합니다.
+        // isPickingMode: 게시물 작성 시 장소 첨부용으로 진입할 때 true
+        // true이면 클릭 시 선택한 장소 이름/주소를 결과로 반환, false이면 PlaceDetailActivity로 이동
         boolean isPickingMode = getIntent().getBooleanExtra("isPickingMode", false);
-
         adapter = new PlaceAdapter(this, new ArrayList<>(), place -> {
             if (isPickingMode) {
-                // 📍 [상황 A] 글쓰기 화면에서 장소 첨부 버튼을 누르고 들어왔을 때 -> 데이터를 들고 돌아갑니다!
                 Intent resultIntent = new Intent();
                 resultIntent.putExtra("selectedPlaceName", place.get("name"));
-
                 String address = place.containsKey("address") ? place.get("address") : "주소 정보 없음";
                 resultIntent.putExtra("selectedPlaceAddress", address);
-
                 setResult(Activity.RESULT_OK, resultIntent);
-                finish(); // 창 닫기
-
+                finish();
             } else {
-                // 📍 [상황 B] 원래 기능팀 코드 (일반 장소 검색일 때) -> 상세 페이지로 넘어갑니다!
                 Intent intent = new Intent(this, PlaceDetailActivity.class);
                 intent.putExtra("place_id", place.get("place_id"));
                 intent.putExtra("place_name", place.get("name"));
@@ -85,6 +77,7 @@ public class PlaceSearchActivity extends AppCompatActivity {
                 return;
             }
             progressBar.setVisibility(android.view.View.VISIBLE);
+            // Google Places 텍스트 검색 실행 (백그라운드 스레드, 결과는 UI 스레드에서 반영)
             apiHelper.searchPlaces(query, null, new PlacesApiHelper.PlacesCallback() {
                 @Override
                 public void onSuccess(List<Map<String, String>> places) {

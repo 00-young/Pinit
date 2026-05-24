@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [레이아웃] 로그인/회원가입 화면
+     구성: 앱 타이틀 → 이메일 입력 → 비밀번호 입력 → 로그인 버튼 → 회원가입 버튼 → ProgressBar
+     ProgressBar는 평소 gone, Firebase 요청 중일 때만 visible로 전환 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="32dp"
+    android:background="#FFFFFF">
+
+    <!-- 앱 타이틀 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="✈️ 여행 트래커"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="#000000"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="나만의 여행을 기록하세요"
+        android:textSize="14sp"
+        android:textColor="#999999"
+        android:layout_marginBottom="40dp"/>
+
+    <!-- 이메일 -->
+    <EditText
+        android:id="@+id/etEmail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="이메일"
+        android:inputType="textEmailAddress"
+        android:padding="14dp"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/bg_input"
+        android:textSize="15sp"/>
+
+    <!-- 비밀번호 -->
+    <EditText
+        android:id="@+id/etPassword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="비밀번호 (6자 이상)"
+        android:inputType="textPassword"
+        android:padding="14dp"
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/bg_input"
+        android:textSize="15sp"/>
+
+    <!-- 로그인 버튼 -->
+    <Button
+        android:id="@+id/btnLogin"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="로그인"
+        android:textSize="16sp"
+        android:textColor="#000000"
+        android:backgroundTint="#FFDA44"
+        android:layout_marginBottom="12dp"/>
+
+    <!-- 회원가입 버튼 -->
+    <Button
+        android:id="@+id/btnRegister"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="회원가입"
+        android:textSize="16sp"
+        android:textColor="#000000"
+        android:backgroundTint="#FFF3C3"
+        android:layout_marginBottom="16dp"/>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"/>
+
+</LinearLayout>

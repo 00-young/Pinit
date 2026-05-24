@@ -24,15 +24,6 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <View
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:background="@drawable/bg_tiny_badge"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
         <TextView
             android:id="@+id/btnLogout"
             android:layout_width="wrap_content"
@@ -49,7 +40,7 @@
     <LinearLayout
         android:id="@+id/profileSummary"
         android:layout_width="match_parent"
-        android:layout_height="220dp"
+        android:layout_height="250dp"
         android:orientation="vertical"
         android:paddingStart="16dp"
         android:paddingTop="10dp"
@@ -58,15 +49,18 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="120dp"
+            android:layout_height="150dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <View
+            <ImageView
                 android:id="@+id/profileAvatar"
                 android:layout_width="108dp"
                 android:layout_height="108dp"
-                android:background="@drawable/bg_profile_avatar" />
+                android:background="@drawable/bg_profile_avatar"
+                android:clipToOutline="true"
+                android:contentDescription="프로필 사진"
+                android:scaleType="centerCrop" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -87,21 +81,36 @@
                     android:textSize="24sp"
                     android:textStyle="bold" />
 
+                <TextView
+                    android:id="@+id/profileBio"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:text="여행 기록을 차곡차곡 모으는 중"
+                    android:textColor="#555555"
+                    android:textSize="14sp" />
+
                 <LinearLayout
                     android:id="@+id/profileStats"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
+                    android:layout_marginTop="16dp"
                     android:orientation="horizontal"
-                    android:weightSum="3">
+                    android:weightSum="2">
 
                     <LinearLayout
+                        android:id="@+id/btnFollowers"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:clickable="true"
+                        android:focusable="true"
                         android:orientation="vertical">
 
                         <TextView
+                            android:id="@+id/followerCount"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="0"
@@ -118,12 +127,16 @@
                     </LinearLayout>
 
                     <LinearLayout
+                        android:id="@+id/btnFollowing"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:clickable="true"
+                        android:focusable="true"
                         android:orientation="vertical">
 
                         <TextView
+                            android:id="@+id/followingCount"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="0"
@@ -135,28 +148,6 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="팔로우"
-                            android:textColor="#000000"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0"
-                            android:textColor="#000000"
-                            android:textSize="20sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="스크랩"
                             android:textColor="#000000"
                             android:textSize="13sp" />
                     </LinearLayout>
@@ -173,8 +164,9 @@
 
             <TextView
                 android:id="@+id/btnEditProfile"
-                android:layout_width="112dp"
-                android:layout_height="38dp"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
                 android:background="@drawable/bg_profile_button"
                 android:gravity="center"
                 android:text="프로필 수정"
@@ -182,12 +174,18 @@
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
+            <Space
+                android:layout_width="16dp"
+                android:layout_height="1dp" />
+
             <TextView
                 android:id="@+id/btnMyScrap"
-                android:layout_width="112dp"
-                android:layout_height="38dp"
-                android:layout_marginStart="52dp"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
                 android:background="@drawable/bg_profile_button"
+                android:clickable="true"
+                android:focusable="true"
                 android:gravity="center"
                 android:text="내 스크랩"
                 android:textColor="#000000"
@@ -209,6 +207,6 @@
         android:layout_weight="1"
         android:overScrollMode="never"
         tools:itemCount="0"
-        tools:listitem="@layout/item_my_page_post" />
+        tools:listitem="@layout/item_feed" />
 
 </LinearLayout>

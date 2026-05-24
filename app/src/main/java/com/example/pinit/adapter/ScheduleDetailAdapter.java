@@ -18,19 +18,23 @@ public class ScheduleDetailAdapter extends RecyclerView.Adapter<ScheduleDetailAd
 
     public interface OnMapClickListener { void onMapClick(Schedule schedule); }
     public interface OnDeleteListener { void onDelete(int id); }
+    public interface OnEditListener { void onEdit(Schedule schedule); }
 
     private Context context;
     private List<Schedule> list;
     private OnMapClickListener mapClickListener;
     private OnDeleteListener deleteListener;
+    private OnEditListener editListener;
 
     public ScheduleDetailAdapter(Context context, List<Schedule> list,
                                  OnMapClickListener mapClickListener,
-                                 OnDeleteListener deleteListener) {
+                                 OnDeleteListener deleteListener,
+                                 OnEditListener editListener) {
         this.context = context;
         this.list = list;
         this.mapClickListener = mapClickListener;
         this.deleteListener = deleteListener;
+        this.editListener = editListener;
     }
 
     public void updateList(List<Schedule> newList) {
@@ -56,6 +60,9 @@ public class ScheduleDetailAdapter extends RecyclerView.Adapter<ScheduleDetailAd
 
         holder.tvOpenMap.setOnClickListener(v -> mapClickListener.onMapClick(s));
 
+        holder.itemView.setOnClickListener(v -> {
+            if (editListener != null) editListener.onEdit(s);
+        });
         holder.itemView.setOnLongClickListener(v -> {
             deleteListener.onDelete(s.getId());
             return true;

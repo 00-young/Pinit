@@ -67,7 +67,7 @@ public class FeedFragment extends Fragment {
             query = getArguments().getString(PostSearchActivity.EXTRA_SEARCH_QUERY, "");
 
             //  2. MainActivity에서 넣어준 여행 설정 데이터 꺼내기
-            ArrayList<String> settings = getArguments().getStringArrayList("travel_settings");
+            ArrayList<String> settings = getArguments().getStringArrayList(PostSearchActivity.EXTRA_TRAVEL_SETTINGS);
             if (settings != null) {
                 travelSettingTags.addAll(settings);
             }
@@ -187,10 +187,23 @@ public class FeedFragment extends Fragment {
         return queryBuilder.toString().trim();
     }
 
+    private String buildEditableSearchQuery() {
+        String typedQuery = searchEditText.getText().toString().trim();
+        StringBuilder queryBuilder = new StringBuilder(typedQuery);
+
+        for (String tag : selectedTags) {
+            if (queryBuilder.length() > 0) queryBuilder.append(' ');
+            queryBuilder.append(tag);
+        }
+
+        return queryBuilder.toString().trim();
+    }
+
     private void openSearchScreen() {
         Intent intent = new Intent(requireContext(), PostSearchActivity.class);
         // 검색바를 눌러 돌아갈 때는 모든 조건을 하나로 뭉쳐서 가져갑니다.
-        intent.putExtra(PostSearchActivity.EXTRA_SEARCH_QUERY, buildSearchQuery());
+        intent.putExtra(PostSearchActivity.EXTRA_SEARCH_QUERY, buildEditableSearchQuery());
+        intent.putStringArrayListExtra(PostSearchActivity.EXTRA_TRAVEL_SETTINGS, new ArrayList<>(travelSettingTags));
         startActivity(intent);
     }
 }

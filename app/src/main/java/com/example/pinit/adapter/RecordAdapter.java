@@ -16,16 +16,25 @@ import java.util.List;
 
 public class RecordAdapter extends RecyclerView.Adapter<RecordAdapter.ViewHolder> {
 
+    public interface OnClickListener { void onClick(Record record); }
     public interface OnDeleteListener { void onDelete(int id); }
 
     private Context context;
     private List<Record> list;
+    private OnClickListener clickListener;
     private OnDeleteListener listener;
 
-    public RecordAdapter(Context context, List<Record> list, OnDeleteListener listener) {
+    public RecordAdapter(Context context, List<Record> list,
+                         OnClickListener clickListener, OnDeleteListener listener) {
         this.context = context;
         this.list = list;
+        this.clickListener = clickListener;
         this.listener = listener;
+    }
+
+    public void updateList(List<Record> newList) {
+        this.list = newList;
+        notifyDataSetChanged();
     }
 
     @NonNull
@@ -42,6 +51,7 @@ public class RecordAdapter extends RecyclerView.Adapter<RecordAdapter.ViewHolder
         holder.tvDate.setText("📅 " + r.getDate());
         holder.tvContent.setText(r.getContent() != null ? r.getContent() : "");
         holder.tvPlace.setText(r.getPlaceName() != null ? "📍 " + r.getPlaceName() : "");
+        holder.itemView.setOnClickListener(v -> { if (clickListener != null) clickListener.onClick(r); });
         holder.itemView.setOnLongClickListener(v -> { listener.onDelete(r.getId()); return true; });
     }
 

@@ -16,14 +16,19 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.example.pinit.R;
+import com.example.pinit.data.MyComment;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
-import java.util.ArrayList;
+import java.util.List;
 
 public class CommentBottomSheetFragment extends BottomSheetDialogFragment {
 
-    // 창이 닫혀도 데이터가 날아가지 않도록 기억해주는 '공용 메모장(static)' 입니다!
-    private static ArrayList<String> savedComments = new ArrayList<>();
+    private static final String PREFS_NAME = "UserPrefs";
+    private static final String KEY_NICKNAME = "nickname";
+    private static final String DEFAULT_NICKNAME = "User_1234567";
+    private static final String LEGACY_DEFAULT_NICKNAME = "\uB0C9\uB3D9\uB41C \uBE14\uB8E8\uBCA0\uB9AC";
+
+    private static final String POST_ID = MyComment.POST_ID_SHANGHAI;
 
     @Nullable
     @Override
@@ -34,52 +39,37 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment {
         Button btnSendComment = view.findViewById(R.id.btnSendComment);
         LinearLayout layoutCommentList = view.findViewById(R.id.layoutCommentList);
 
-        // 폰 내부 금고에서 닉네임 꺼내오기
-        SharedPreferences prefs = getContext().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
-        String myNickname = prefs.getString("nickname", "알 수 없는 유저");
-
-        // ====================================================================
-        //  1. 바텀시트를 새로 열었을 때, 메모장에 적힌 댓글이 있다면 쫙 그려줍니다.
-        // ====================================================================
-        if (!savedComments.isEmpty()) {
-            layoutCommentList.removeAllViews(); // "가장 먼저..." 문구 지우기
-
-            // 기억해둔 댓글 개수만큼 반복해서 화면에 추가합니다.
-            for (String savedText : savedComments) {
-                addCommentViewToLayout(layoutCommentList, myNickname, savedText);
+        List<String> comments = MyComment.getComments(requireContext(), POST_ID);
+        if (!comments.isEmpty()) {
+            layoutCommentList.removeAllViews();
+            String myNickname = getMyNickname();
+            for (String comment : comments) {
+                addCommentViewToLayout(layoutCommentList, myNickname, comment);
             }
         }
 
-        // ====================================================================
-        // 2. 게시 버튼을 눌렀을 때의 동작
-        // ====================================================================
         btnSendComment.setOnClickListener(v -> {
             String comment = etCommentInput.getText().toString().trim();
-
-            if (!comment.isEmpty()) {
-                // 첫 댓글이라면 "가장 먼저..." 문구를 지웁니다.
-                if (savedComments.isEmpty()) {
-                    layoutCommentList.removeAllViews();
-                }
-
-                // 나중에 창을 다시 열 때를 대비해서 메모장에 텍스트를 저장해 둡니다.
-                savedComments.add(comment);
-
-                // 방금 쓴 댓글을 화면 맨 아래에 즉시 그립니다.
-                addCommentViewToLayout(layoutCommentList, myNickname, comment);
-
-                etCommentInput.setText("");
-                Toast.makeText(getContext(), "댓글이 등록되었습니다.", Toast.LENGTH_SHORT).show();
-
-            } else {
-                Toast.makeText(getContext(), "댓글을 입력해주세요.", Toast.LENGTH_SHORT).show();
+            if (comment.isEmpty()) {
+                Toast.makeText(getContext(), "\uB313\uAE00\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694.", Toast.LENGTH_SHORT).show();
+                return;
             }
+
+            if (MyComment.getComments(requireContext(), POST_ID).isEmpty()) {
+                layoutCommentList.removeAllViews();
+            }
+
+            String myNickname = getMyNickname();
+            MyComment.addComment(requireContext(), POST_ID, comment);
+            addCommentViewToLayout(layoutCommentList, myNickname, comment);
+
+            etCommentInput.setText("");
+            Toast.makeText(getContext(), "\uB313\uAE00\uC774 \uB4F1\uB85D\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", Toast.LENGTH_SHORT).show();
         });
 
         return view;
     }
 
-    //  댓글 UI를 조립해서 화면에 붙여주는 전용 함수
     private void addCommentViewToLayout(LinearLayout container, String nickname, String commentText) {
         LinearLayout commentWrapper = new LinearLayout(getContext());
         commentWrapper.setOrientation(LinearLayout.VERTICAL);
@@ -99,7 +89,17 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment {
 
         commentWrapper.addView(tvUserName);
         commentWrapper.addView(tvComment);
-
         container.addView(commentWrapper);
     }
+
+    private String getMyNickname() {
+        SharedPreferences prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String nickname = prefs.getString(KEY_NICKNAME, DEFAULT_NICKNAME);
+        if (nickname == null || nickname.trim().isEmpty() || LEGACY_DEFAULT_NICKNAME.equals(nickname)) {
+            prefs.edit().putString(KEY_NICKNAME, DEFAULT_NICKNAME).apply();
+            return DEFAULT_NICKNAME;
+        }
+        return nickname;
+    }
+
 }
