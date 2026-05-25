@@ -16,7 +16,8 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:layout_centerVertical="true"
-            android:src="@drawable/ic_arrow_back" />
+            android:src="@drawable/ic_arrow_back"
+            android:contentDescription="뒤로가기" />
 
         <TextView
             android:layout_width="wrap_content"

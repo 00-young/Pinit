@@ -25,7 +25,6 @@ import java.util.List;
 // TODO: 개발 완료 후 삭제 예정 (테스트용)
 public class TestUserListActivity extends AppCompatActivity {
 
-    private RecyclerView recyclerView;
     private TestUserAdapter adapter;
     private final List<User> userList = new ArrayList<>();
 
@@ -36,7 +35,7 @@ public class TestUserListActivity extends AppCompatActivity {
 
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
 
-        recyclerView = findViewById(R.id.rvTestUsers);
+        RecyclerView recyclerView = findViewById(R.id.rvTestUsers);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         adapter = new TestUserAdapter(userList);
         recyclerView.setAdapter(adapter);
@@ -82,20 +81,24 @@ public class TestUserListActivity extends AppCompatActivity {
             holder.name.setText(user.getNickname());
             holder.bio.setText(user.getBio());
 
+            // 초기 상태 설정
             FirebaseManager.getInstance().checkFollowing(user.getEmail(), isFollowing -> {
-                holder.actionButton.setText(isFollowing ? "\uC5B8\uD314\uB85C\uC6B0\uD558\uAE30" : "\uD314\uB85C\uC6B0\uD558\uAE30");
+                holder.actionButton.setText(isFollowing ? "언팔로우하기" : "팔로우하기");
             });
 
             holder.actionButton.setOnClickListener(v -> {
+                int pos = holder.getBindingAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION) return;
+
                 FirebaseManager.getInstance().checkFollowing(user.getEmail(), isFollowing -> {
                     if (isFollowing) {
                         FirebaseManager.getInstance().unfollowUser(user.getEmail(), new FirebaseManager.OnActionListener() {
                             @Override
                             public void onSuccess() {
-                                // 테스트 리스트에서도 최신 인덱스를 가져와 안전하게 업데이트
+                                // 최신 인덱스 재확인
                                 int currentPos = holder.getBindingAdapterPosition();
                                 if (currentPos != RecyclerView.NO_POSITION) {
-                                    holder.actionButton.setText("\uD314\uB85C\uC6B0\uD558\uAE30");
+                                    holder.actionButton.setText("팔로우하기");
                                 }
                             }
                             @Override
@@ -107,7 +110,7 @@ public class TestUserListActivity extends AppCompatActivity {
                             public void onSuccess() {
                                 int currentPos = holder.getBindingAdapterPosition();
                                 if (currentPos != RecyclerView.NO_POSITION) {
-                                    holder.actionButton.setText("\uC5B8\uD314\uB85C\uC6B0\uD558\uAE30");
+                                    holder.actionButton.setText("언팔로우하기");
                                 }
                             }
                             @Override

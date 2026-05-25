@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
@@ -38,6 +39,7 @@
         <activity android:name=".activity.ReceiptScanActivity" android:exported="false" />
         <activity android:name=".activity.TripSummaryActivity" android:exported="false" />
 
-        <activity android:name=".activity.TestUserListActivity" android:exported="false" />
+        <activity android:name=".activity.TestUserListActivity"
+            android:exported="false" />
     </application>
 </manifest>
