@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.example.pinit.R;
 import com.example.pinit.manager.FirebaseManager;
 import com.example.pinit.model.User;
+import com.example.pinit.util.NotificationPermissionHelper;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
@@ -26,6 +27,7 @@ public class LoginActivity extends AppCompatActivity {
     private Button btnLogin, btnRegister;
     private ProgressBar progressBar;
     private FirebaseAuth mAuth; // Firebase 인증 인스턴스
+    private NotificationPermissionHelper permissionHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,6 +35,7 @@ public class LoginActivity extends AppCompatActivity {
         setContentView(R.layout.activity_login);
 
         mAuth = FirebaseAuth.getInstance();
+        permissionHelper = new NotificationPermissionHelper(this);
 
         etEmail    = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
@@ -123,7 +126,9 @@ public class LoginActivity extends AppCompatActivity {
                                     btnLogin.setEnabled(true);
                                     btnRegister.setEnabled(true);
                                     Toast.makeText(LoginActivity.this, "회원가입 완료! 로그인합니다.", Toast.LENGTH_SHORT).show();
-                                    goToMain();
+                                    
+                                    // 🔔 회원가입 성공 직후, 알림 권한 요청 후 메인으로 이동
+                                    permissionHelper.requestNotificationPermission(() -> goToMain());
                                 }
 
                                 @Override
@@ -153,6 +158,9 @@ public class LoginActivity extends AppCompatActivity {
 
     // MainActivity로 이동 후 현재 Activity 종료 (백 스택에서 제거 → 뒤로가기로 복귀 불가)
     private void goToMain() {
+        // 로그인 성공 시 FCM 토큰 업데이트 수행
+        FirebaseManager.getInstance().updateFcmToken();
+
         startActivity(new Intent(this, MainActivity.class));
         finish();
     }
