@@ -213,40 +213,191 @@ public class ReceiptScanActivity extends AppCompatActivity {
                 });
     }
 
+    /**
+     * OCR 인식 오류 전처리
+     * "90. 000" / "90, 000" / "90. O00" → "90000"으로 통일
+     */
+    private String normalizeOcrText(String text) {
+        // 1. 알파벳 O/o/D/Q → 숫자 0으로 치환
+        text = text.replace("O", "0")
+                .replace("o", "0")
+                .replace("D", "0")
+                .replace("Q", "0");
+
+        // 2. "숫자. 숫자" or "숫자, 숫자" (공백 포함) → 붙이기
+        // 예: "90. 000" → "90000", "9, 000" → "9000"
+        text = text.replaceAll("([0-9]+)[.,]\\s+([0-9]{3})", "$1$2");
+
+        // 3. 공백 없는 경우: "90.000" or "90,000" → "90000" or "90,000"
+        // 쉼표는 천단위 구분자로 유지 (패턴 매칭용), 점은 제거
+        text = text.replaceAll("([0-9]+)\\.([0-9]{3})", "$1$2");
+
+        return text;
+    }
+
     // 금액 추출 로직 - 합계/총액/결제금액 키워드 우선, 없으면 가장 큰 숫자
     private double extractAmount(String text) {
-        // 합계/총액 관련 키워드 찾기
-        String[] keywords = {"합계", "총액", "결제금액", "총합계", "받을금액", "청구금액", "total", "TOTAL"};
+
+        // 여기 추가 - OCR 결과 전체를 먼저 보정
+        text = normalizeOcrText(text);
         String[] lines = text.split("\n");
 
-        for (String keyword : keywords) {
-            for (int i = 0; i < lines.length; i++) {
-                if (lines[i].contains(keyword)) {
-                    // 해당 줄과 다음 줄에서 숫자 추출
-                    String target = lines[i];
-                    if (i + 1 < lines.length) target += " " + lines[i + 1];
-                    double amount = extractNumber(target);
-                    if (amount > 0) return amount;
+        Pattern amountPattern =
+                Pattern.compile("[0-9]{1,3}(,[0-9]{3})+|[0-9]{3,7}");
+
+        double bestAmount = 0;
+
+        // =========================
+        // 1차: 합계 키워드 주변 탐색
+        // =========================
+
+        for (int i = 0; i < lines.length; i++) {
+
+            String lower = lines[i].toLowerCase();
+
+            boolean isTotalLine =
+                    lower.matches(".*합\\s*계.*")
+                            || lower.matches(".*총\\s*액.*")
+                            || lower.matches(".*받\\s*을\\s*금\\s*액.*")
+                            || lower.matches(".*받\\s*은\\s*금\\s*액.*")
+                            || lower.matches(".*결\\s*제\\s*금\\s*액.*")
+                            || lower.contains("total");
+
+            if (!isTotalLine)
+                continue;
+
+            // 현재 줄 + 아래 2줄까지 탐색
+            for (int j = i; j <= Math.min(i + 2, lines.length - 1); j++) {
+
+                Matcher matcher =
+                        amountPattern.matcher(lines[j]);
+
+                double localMax = 0;
+
+                while (matcher.find()) {
+
+                    try {
+
+                        String amountStr = matcher.group();
+
+                        // =========================
+                        // OCR 숫자 후처리
+                        // =========================
+
+                        // 숫자만 남기기
+                        amountStr = amountStr.replaceAll("[^0-9]", "");
+
+                        if (amountStr.length() < 3)
+                            continue;
+
+                        double amountValue =
+                                Double.parseDouble(amountStr);
+
+                        // 현실적인 범위
+                        if (amountValue < 100
+                                || amountValue > 3000000)
+                            continue;
+
+                        // 가장 큰 금액 저장
+                        if (amountValue > localMax) {
+                            localMax = amountValue;
+                        }
+
+                    } catch (Exception ignored) {}
+                }
+                // 합계 주변 최대값 반환
+                if (localMax > 0) {
+                    return localMax;
                 }
             }
         }
 
-        // 키워드 없으면 가장 큰 숫자 반환
-        double maxAmount = 0;
-        Pattern pattern = Pattern.compile("[0-9,]+");
-        Matcher matcher = pattern.matcher(text);
-        while (matcher.find()) {
-            String numStr = matcher.group().replace(",", "");
-            try {
-                double num = Double.parseDouble(numStr);
-                if (num > maxAmount && num < 10000000) maxAmount = num;
-            } catch (NumberFormatException ignored) {}
+        // =========================
+        // 2차 fallback
+        // =========================
+        // 합계 탐색 실패 시만 실행
+
+        if (bestAmount == 0) {
+
+            int bestScore = -999;
+
+            for (String line : lines) {
+
+                String lower = line.toLowerCase();
+
+                int score = 0;
+
+                // 금액 가능성 높은 키워드
+                if (lower.contains("원")) score += 3;
+
+                // 제외 대상
+                if (lower.contains("tel")) score -= 20;
+                if (lower.contains("전화")) score -= 20;
+                if (lower.contains("사업자")) score -= 20;
+                if (lower.contains("승인번호")) score -= 20;
+                if (lower.contains("번호")) score -= 20;
+                if (lower.contains("카드")) score -= 20;
+                if (lower.contains("주소")) score -= 20;
+                if (lower.contains("서울")) score -= 20;
+                if (lower.contains("아파트")) score -= 20;
+                if (lower.contains("동")) score -= 10;
+                if (lower.contains("호")) score -= 10;
+                if (lower.contains("전자전표")) score -= 20;
+                if (lower.contains("부가세")) score -= 20;
+                if (lower.contains("bill")) score -= 20;
+                if (lower.contains("pos")) score -= 20;
+
+                if (lower.matches(".*\\d{8}-\\d{2}-\\d+.*"))
+                    score -= 30;
+
+                if (lower.matches(".*\\d{4}-\\d{2}-\\d{2}.*"))
+                    score -= 20;
+
+                Matcher matcher =
+                        amountPattern.matcher(line);
+
+                while (matcher.find()) {
+
+                    try {
+
+                        String numStr =
+                                matcher.group().replace(",", "");
+
+                        // 긴 숫자 제외
+                        if (numStr.length() >= 6
+                                && !numStr.contains(",")) {
+                            continue;
+                        }
+
+                        double value =
+                                Double.parseDouble(numStr);
+
+                        if (value < 100 || value > 3000000)
+                            continue;
+
+                        if (score > bestScore) {
+
+                            bestScore = score;
+                            bestAmount = value;
+                        }
+
+                        else if (score == bestScore
+                                && value > bestAmount) {
+
+                            bestAmount = value;
+                        }
+
+                    } catch (Exception ignored) {}
+                }
+            }
         }
-        return maxAmount;
+
+        return bestAmount;
     }
 
     private double extractNumber(String text) {
-        Pattern pattern = Pattern.compile("[0-9,]+");
+        Pattern pattern =
+                Pattern.compile("(\\\\d{1,3}(,\\\\d{3})+|\\\\d+)");
         Matcher matcher = pattern.matcher(text);
         double max = 0;
         while (matcher.find()) {

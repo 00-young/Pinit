@@ -71,7 +71,9 @@
             android:text="+ 일정 추가"
             android:textSize="13sp"
             android:textColor="#000000"
-            android:backgroundTint="#FFDA44"/>
+            android:backgroundTint="#FFDA44"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"/>
     </LinearLayout>
 
     <!-- 날짜별 탭 (가로 스크롤) -->
