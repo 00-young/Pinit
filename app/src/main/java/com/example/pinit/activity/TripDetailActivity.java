@@ -552,71 +552,7 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         intent.putExtra("default_date", selectedDate);
         startActivityForResult(intent, REQUEST_ADD_SCHEDULE);
     }
-    /*
-    private void uploadScheduleToFirestore() {
-
-        FirestoreRepository repository =
-                new FirestoreRepository();
-
-        String scheduleId = String.valueOf(tripId);
-
-        FirebaseUser user =
-                FirebaseAuth.getInstance()
-                        .getCurrentUser();
-
-        String userId = "";
-
-        if (user != null) {
-            userId = user.getUid();
-        }
-
-        repository.uploadSchedule(
-                scheduleId,
-                userId,
-                trip.getTitle(),
-                "한국",
-                trip.getDestination(),
-                1,
-                trip.getBudget(),
-                trip.getStartDate(),
-                trip.getEndDate()
-        );
-
-        List<Schedule> schedules =
-                dbHelper.getSchedulesByTrip(tripId);
-
-        for (Schedule s : schedules) {
-
-            String dayId = s.getDate();
-
-            int dayNumber =
-                    dateList.indexOf(s.getDate()) + 1;
-
-            repository.uploadDay(
-                    scheduleId,
-                    dayId,
-                    dayNumber,
-                    s.getDate()
-            );
-
-            String itemId =
-                    "item" + s.getId();
-
-            repository.uploadItem(
-                    scheduleId,
-                    dayId,
-                    itemId,
-                    s
-            );
-        }
-
-        Toast.makeText(
-                this,
-                "Firestore 업로드 완료",
-                Toast.LENGTH_SHORT
-        ).show();
-    }
-     */
+    
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
