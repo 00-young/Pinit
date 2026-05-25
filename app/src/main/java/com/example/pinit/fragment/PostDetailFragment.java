@@ -33,8 +33,11 @@ import java.util.List;
 public class PostDetailFragment extends Fragment {
 
     private LinearLayout layoutPlacesList;
+    private LinearLayout layoutPlacesList2;
     private Button btnShowMore;
+    private Button btnShowMore2;
     private boolean isExpanded = false;
+    private boolean isExpanded2 = false;
 
     // DAY 1 장소 리스트
     private String[] placeNamesDay1 = {
@@ -44,6 +47,7 @@ public class PostDetailFragment extends Fragment {
             "난징동루 보행자 거리",
             "와이탄 야경"
     };
+    private String[] placeNamesDay2 = {"신천지 거리", "상하이 디즈니랜드", "예원 야경"};
 
     @Nullable
     @Override
@@ -51,8 +55,9 @@ public class PostDetailFragment extends Fragment {
         View view = inflater.inflate(R.layout.activity_post_detail, container, false);
 
         layoutPlacesList = view.findViewById(R.id.layoutPlacesList);
+        layoutPlacesList2 = view.findViewById(R.id.layoutPlacesList2);
         btnShowMore = view.findViewById(R.id.btnShowMore);
-        // onCreateView 내부에서 뷰(View)가 inflate된 직후 아래 코드들을 붙여넣으세요.
+        btnShowMore2 = view.findViewById(R.id.btnShowMore2);
 
 // 1. 일정 담기 기능 (토스트 팝업)
         Button btnSaveAllSchedule = view.findViewById(R.id.btnSaveAllSchedule);
@@ -148,7 +153,7 @@ public class PostDetailFragment extends Fragment {
         }
 
         // ==========================================
-        // [2] DAY 2 지도 세팅 (새로 추가된 부분!)
+        // [2] DAY 2 지도 세팅
         // ==========================================
         SupportMapFragment mapFragment2 = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.mapViewDetail2);
         if (mapFragment2 != null) {
@@ -165,11 +170,18 @@ public class PostDetailFragment extends Fragment {
 
         // DAY 1 텍스트 리스트 렌더링
         renderPlacesListDay1();
+        renderPlacesListDay2();
 
         btnShowMore.setOnClickListener(v -> {
             isExpanded = !isExpanded;
             btnShowMore.setText(isExpanded ? "접기 ▲" : "더보기 ▼");
             renderPlacesListDay1();
+        });
+
+        btnShowMore2.setOnClickListener(v -> {
+            isExpanded2 = !isExpanded2;
+            btnShowMore2.setText(isExpanded2 ? "접기 ▲" : "더보기 ▼");
+            renderPlacesListDay2(); // DAY 2 전용 렌더링 함수
         });
 
         return view;
@@ -191,6 +203,25 @@ public class PostDetailFragment extends Fragment {
             layoutPlacesList.addView(tvPlace);
         }
 
+        if (placeNamesDay1.length <= 3) {
+            btnShowMore.setVisibility(View.GONE);
+        }
+    }
+    // DAY 2용 리스트 렌더링 (placeNamesDay2는 setupDay2Map에 있는 배열을 클래스 멤버 변수로 빼주세요!)
+    private void renderPlacesListDay2() {
+        if(layoutPlacesList2 == null) return;
+        layoutPlacesList2.removeAllViews();
+        int limit = isExpanded2 ? placeNamesDay2.length : Math.min(3, placeNamesDay2.length);
+
+        for (int i = 0; i < limit; i++) {
+            TextView tvPlace = new TextView(getContext());
+            String numberCircle = String.valueOf((char) ('①' + i));
+            tvPlace.setText(numberCircle + " " + placeNamesDay2[i]);
+            tvPlace.setTextSize(16f);
+            tvPlace.setTextColor(Color.BLACK);
+            tvPlace.setPadding(0, 8, 0, 8);
+            layoutPlacesList2.addView(tvPlace);
+        }
         if (placeNamesDay1.length <= 3) {
             btnShowMore.setVisibility(View.GONE);
         }
@@ -233,8 +264,6 @@ public class PostDetailFragment extends Fragment {
         routePoints.add(new LatLng(31.1433, 121.6580)); // 디즈니랜드
         routePoints.add(new LatLng(31.2272, 121.4921)); // 예원
 
-        String[] placeNamesDay2 = {"신천지 거리", "상하이 디즈니랜드", "예원 야경"};
-
         PolylineOptions polylineOptions = new PolylineOptions().color(Color.parseColor("#FFDA44")).width(8f);
         LatLngBounds.Builder builder = new LatLngBounds.Builder();
 
@@ -245,7 +274,7 @@ public class PostDetailFragment extends Fragment {
 
             googleMap.addMarker(new MarkerOptions()
                     .position(point)
-                    .title(placeNamesDay2[i])
+                    .title(i < placeNamesDay2.length ? placeNamesDay2[i] : "장소")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
         }
 
