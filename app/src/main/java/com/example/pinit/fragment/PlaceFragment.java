@@ -33,11 +33,14 @@ import com.example.pinit.R;
 import com.example.pinit.activity.PlaceDetailActivity;
 import com.example.pinit.adapter.PlaceAdapter;
 import com.example.pinit.database.DatabaseHelper;
+import com.example.pinit.database.FirestoreRepository;
 import com.example.pinit.database.PlacesApiHelper;
 import com.example.pinit.model.Schedule;
 import com.example.pinit.model.Trip;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -263,11 +266,103 @@ public class PlaceFragment extends Fragment {
         schedule.setTripId(trip.getId());
         schedule.setTitle(place.getOrDefault("name", ""));
         schedule.setPlaceName(place.getOrDefault("address", ""));
+        // ===== 좌표 추출 =====
+        double lat = 0;
+        double lng = 0;
+
+        try {
+            lat = Double.parseDouble(
+                    place.getOrDefault("lat", "0")
+            );
+
+            lng = Double.parseDouble(
+                    place.getOrDefault("lng", "0")
+            );
+
+        } catch (Exception ignored) {}
+        schedule.setLatitude(lat);
+        schedule.setLongitude(lng);
+        // ===== placeId / category =====
+        schedule.setGooglePlaceId(
+                place.getOrDefault("place_id", "")
+        );
+        schedule.setCategory(
+                place.getOrDefault("types", "")
+        );
         schedule.setDate(date);
         schedule.setTime(time);
         schedule.setMemo(place.getOrDefault("rating", "").isEmpty() ? "" : place.get("rating") + "점");
         schedule.setColor("#FFDA44");
-        dbHelper.insertSchedule(schedule);
+        long insertedId =
+                dbHelper.insertSchedule(schedule);
+        FirestoreRepository repository =
+                new FirestoreRepository();
+
+        String scheduleId =
+                String.valueOf(trip.getId());
+
+        String dayId = schedule.getDate();
+
+        String itemId =
+                "item" + insertedId;
+
+        // =========================
+        // Firebase uid 연결
+        // =========================
+
+        FirebaseUser user =
+                FirebaseAuth.getInstance()
+                        .getCurrentUser();
+
+        String userId = "";
+
+        if (user != null) {
+            userId = user.getUid();
+        }
+
+        // =========================
+        // 여행 전체(schedule) 업로드
+        // =========================
+
+        repository.uploadSchedule(
+                scheduleId,
+                userId,
+                trip.getTitle(),
+                "한국",
+                trip.getDestination(),
+                1,
+                trip.getBudget(),
+                trip.getStartDate(),
+                trip.getEndDate()
+        );
+
+        // =========================
+        // day 업로드
+        // =========================
+
+        int dayNumber =
+                buildDateList(
+                        trip.getStartDate(),
+                        trip.getEndDate()
+                ).indexOf(schedule.getDate()) + 1;
+
+        repository.uploadDay(
+                scheduleId,
+                dayId,
+                dayNumber,
+                schedule.getDate()
+        );
+
+        // =========================
+        // item 업로드
+        // =========================
+
+        repository.uploadItem(
+                scheduleId,
+                dayId,
+                itemId,
+                schedule
+        );
         Toast.makeText(requireContext(),
                 "'" + place.getOrDefault("name", "") + "'을(를)\n'"
                         + trip.getTitle() + "' " + date
