@@ -102,14 +102,13 @@ public class FirestoreRepository {
         // 현재 SQLite의 place_name은 주소 역할
         item.put("address", schedule.getPlaceName());
 
-        // 아직 SQLite에 좌표 없음
-        item.put("latitude", 0);
-        item.put("longitude", 0);
+        item.put("latitude", schedule.getLatitude());
+        item.put("longitude", schedule.getLongitude());
+
+        item.put("category", schedule.getCategory());
+        item.put("googlePlaceId", schedule.getGooglePlaceId());
 
         item.put("cost", 0);
-
-        item.put("category", "");
-        item.put("googlePlaceId", "");
 
         db.collection("schedules")
                 .document(scheduleId)
