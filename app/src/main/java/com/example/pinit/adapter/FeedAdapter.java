@@ -162,6 +162,9 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
     private void openOtherProfile(View view, String userName) {
         androidx.appcompat.app.AppCompatActivity activity =
                 (androidx.appcompat.app.AppCompatActivity) view.getContext();
+        
+        // 닉네임으로 검색하여 이메일을 찾은 뒤 이동하는 로직이 OtherMyPageFragment 내부에 있으므로
+        // 닉네임만 넘겨주는 기존 방식(newInstance)을 유지하되, 내부에서 이메일을 찾아 리스너를 붙이도록 설계했습니다.
         activity.getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance(userName))
                 .addToBackStack(null)
