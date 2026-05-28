@@ -7,8 +7,10 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
+import android.widget.PopupMenu; // PopupMenu import 추가
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -34,6 +36,7 @@ public class FeedFragment extends Fragment {
     private EditText searchEditText;
     private HorizontalScrollView resultTagScroller;
     private ChipGroup resultTagContainer;
+    private Button btnSort; // 정렬 버튼 변수 추가
 
     // 기존 태그와 여행 설정 태그를 따로 관리합니다.
     private final Set<String> selectedTags = new LinkedHashSet<>();
@@ -76,6 +79,27 @@ public class FeedFragment extends Fragment {
         searchEditText = view.findViewById(R.id.searchEditText);
         resultTagScroller = view.findViewById(R.id.resultTagScroller);
         resultTagContainer = view.findViewById(R.id.resultTagContainer);
+        btnSort = view.findViewById(R.id.btnSort); // 정렬 버튼 연결
+
+        // 드롭다운 정렬 버튼 로직 추가
+        btnSort.setOnClickListener(v -> {
+            PopupMenu popup = new PopupMenu(getContext(), btnSort);
+            popup.getMenu().add("최신순");
+            popup.getMenu().add("스크랩순");
+
+            popup.setOnMenuItemClickListener(item -> {
+                String title = item.getTitle().toString();
+                btnSort.setText(title + " ▼");
+
+                if (title.equals("최신순")) {
+                    adapter.sortPostsByLatest();
+                } else if (title.equals("스크랩순")) {
+                    adapter.sortPostsByScrap();
+                }
+                return true;
+            });
+            popup.show();
+        });
 
         searchEditText.setFocusable(false);
         setInitialQuery(query);

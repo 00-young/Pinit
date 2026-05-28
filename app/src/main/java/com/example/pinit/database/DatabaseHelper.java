@@ -26,7 +26,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     @Override
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE trips (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, destination TEXT, start_date TEXT, end_date TEXT, budget REAL, memo TEXT, cover_image TEXT)");
-        db.execSQL("CREATE TABLE schedules (id INTEGER PRIMARY KEY AUTOINCREMENT, trip_id INTEGER, title TEXT, date TEXT, time TEXT, place_name TEXT, memo TEXT, color TEXT)");
+        db.execSQL("CREATE TABLE schedules (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "trip_id INTEGER, " +
+                "title TEXT, " +
+                "date TEXT, " +
+                "time TEXT, " +
+                "place_name TEXT, " +
+                "memo TEXT, " +
+                "color TEXT, " +
+                "latitude REAL, " +
+                "longitude REAL, " +
+                "google_place_id TEXT, " +
+                "category TEXT)");
         db.execSQL("CREATE TABLE budgets (id INTEGER PRIMARY KEY AUTOINCREMENT, trip_id INTEGER, title TEXT, amount REAL, category TEXT, date TEXT, type TEXT, memo TEXT)");
         db.execSQL("CREATE TABLE records (id INTEGER PRIMARY KEY AUTOINCREMENT, trip_id INTEGER, title TEXT, date TEXT, content TEXT, image_path TEXT, place_name TEXT)");
     }
@@ -98,8 +110,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         v.put("date", s.getDate()); v.put("time", s.getTime());
         v.put("place_name", s.getPlaceName()); v.put("memo", s.getMemo());
         v.put("color", s.getColor());
+        v.put("latitude", s.getLatitude());
+        v.put("longitude", s.getLongitude());
+        v.put("google_place_id", s.getGooglePlaceId());
+        v.put("category", s.getCategory());
         long id = db.insert("schedules", null, v);
-        db.close(); return id;
+        db.close();
+        return id;
     }
 
     public List<Schedule> getSchedulesByTrip(int tripId) {
@@ -126,6 +143,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         s.setPlaceName(c.getString(c.getColumnIndexOrThrow("place_name")));
         s.setMemo(c.getString(c.getColumnIndexOrThrow("memo")));
         s.setColor(c.getString(c.getColumnIndexOrThrow("color")));
+        s.setLatitude(c.getDouble(c.getColumnIndexOrThrow("latitude")));
+        s.setLongitude(c.getDouble(c.getColumnIndexOrThrow("longitude")));
+        s.setGooglePlaceId(c.getString(c.getColumnIndexOrThrow("google_place_id")));
+        s.setCategory(c.getString(c.getColumnIndexOrThrow("category")));
         return s;
     }
 

@@ -4,80 +4,123 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.example.pinit.R;
-import com.example.pinit.adapter.MyPlansAdapter;
-import com.example.pinit.model.MyPlan;
+import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.DailySchedule;
+import com.example.pinit.model.MyPlan;
+import com.example.pinit.model.Schedule;
+import com.example.pinit.model.Trip;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class MyPlansBottomSheetFragment extends BottomSheetDialogFragment {
 
-    private MyPlansAdapter adapter;
-    private List<MyPlan> myPlanList;
+    private DatabaseHelper dbHelper;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.layout_bottom_sheet_my_plans, container, false);
 
-        RecyclerView recyclerView = view.findViewById(R.id.recyclerViewMyPlans);
-        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        RecyclerView rv = view.findViewById(R.id.recyclerViewMyPlans);
+        rv.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        // =========================================================
-        //  데이터 만드는 곳: 가방 안에 파우치를 넣습니다.
-        // =========================================================
+        //DB에서 여행 목록 가져오기
+        dbHelper = new DatabaseHelper(requireContext());
+        List<Trip> tripList = dbHelper.getAllTrips();
 
-        // 1. 세부 일정(장소) 데이터 만들기
-        List<String> day1Places = new ArrayList<>();
-        day1Places.add("상하이 푸둥 국제 공항");
-        day1Places.add("Shanghai Royal Garden Hotel");
-        day1Places.add("상하이 디즈니랜드");
-
-        List<String> day2Places = new ArrayList<>();
-        day2Places.add("동방명주");
-        day2Places.add("대한민국 임시정부");
-
-        // 2. 날짜별 파우치(DailySchedule) 만들기
-        DailySchedule day1 = new DailySchedule("DAY 1", "5월 1일", day1Places);
-        DailySchedule day2 = new DailySchedule("DAY 2", "5월 2일", day2Places);
-
-        // 3. 여행 가방(MyPlan)에 파우치 담기
-        myPlanList = new ArrayList<>();
-
-        // 상황 A: [일정 전체 담기] (DAY1, DAY2 모두 있음)
-        List<DailySchedule> fullSchedule = new ArrayList<>();
-        fullSchedule.add(day1);
-        fullSchedule.add(day2);
-        myPlanList.add(new MyPlan("PLAN_001", "1박 2일 상하이 (전체)", "2026/05/01 ~ 05/02", "상하이", fullSchedule));
-
-        // 상황 B: [이 날짜의 일정만 담기] (DAY1 하나만 있음!)
-        List<DailySchedule> partialSchedule = new ArrayList<>();
-        partialSchedule.add(day1);
-        myPlanList.add(new MyPlan("PLAN_002", "상하이 (DAY1만 담음)", "2026/05/01", "상하이", partialSchedule));
-
-        // =========================================================
-
-        //  OnPlanSelectedListener에서 '선택' 기능만 수행
-        adapter = new MyPlansAdapter(myPlanList, new MyPlansAdapter.OnPlanSelectedListener() {
+        rv.setAdapter(new RecyclerView.Adapter<PlanViewHolder>() {
+            @NonNull
             @Override
-            public void onPlanSelected(MyPlan plan) {
-                // 선택된 여행 데이터를 통째로 쏴줍니다!
-                Bundle result = new Bundle();
-                result.putSerializable("selectedPlan", plan);
-                getParentFragmentManager().setFragmentResult("planResult", result);
-
-                dismiss(); // 바텀 시트 닫기
+            public PlanViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+                // XML 아이템 이름 맞게 수정 (기능팀의 item_trip.xml이나 별도 아이템)
+                View v = LayoutInflater.from(parent.getContext()).inflate(android.R.layout.simple_list_item_1, parent, false);
+                return new PlanViewHolder(v);
             }
 
+            @Override
+            public void onBindViewHolder(@NonNull PlanViewHolder holder, int position) {
+                Trip trip = tripList.get(position);
+                holder.textView.setText(trip.getTitle() + "\n(" + trip.getStartDate() + " ~ " + trip.getEndDate() + ")");
+
+                holder.itemView.setOnClickListener(v -> {
+                    //  클릭 시 해당 여행의 모든 일정을 가져오기
+                    List<Schedule> rawSchedules = dbHelper.getSchedulesByTrip(trip.getId());
+
+                    // 기능팀과 똑같이 '시간순'으로 먼저 정렬
+                    rawSchedules.sort((a, b) -> {
+                        String ta = a.getTime() == null ? "" : a.getTime();
+                        String tb = b.getTime() == null ? "" : b.getTime();
+                        String[] pa = ta.split(":");
+                        String[] pb = tb.split(":");
+                        try {
+                            int ha = pa.length > 0 ? Integer.parseInt(pa[0]) : 0;
+                            int ma = pa.length > 1 ? Integer.parseInt(pa[1]) : 0;
+                            int hb = pb.length > 0 ? Integer.parseInt(pb[0]) : 0;
+                            int mb = pb.length > 1 ? Integer.parseInt(pb[1]) : 0;
+                            return ha != hb ? ha - hb : ma - mb;
+                        } catch (NumberFormatException e) {
+                            return ta.compareTo(tb);
+                        }
+                    });
+                    //  List<String> 대신 List<Schedule>을 담도록 바구니 변경
+                    Map<String, List<Schedule>> grouped = new TreeMap<>();
+                    for (Schedule s : rawSchedules) {
+                        String date = s.getDate() != null ? s.getDate() : "날짜 미상";
+                        grouped.putIfAbsent(date, new ArrayList<>());
+
+                        // 장소명(글자)만 빼서 넣던 코드를 지우고, Schedule 객체를 통째로 넣습니다
+                        grouped.get(date).add(s);
+                    }
+
+                    // CreatePostFragment로 보낼 데이터 구조 만들기
+                    List<DailySchedule> dailySchedules = new ArrayList<>();
+                    int dayCount = 1;
+
+                    // 여기도 Map.Entry<String, List<Schedule>> 로 맞춰줍니다.
+                    for (Map.Entry<String, List<Schedule>> entry : grouped.entrySet()) {
+                        dailySchedules.add(new DailySchedule("DAY " + dayCount, entry.getKey(), entry.getValue()));
+                        dayCount++;
+                    }
+
+                    // 4개의 데이터를 채워 넣습니다 (제목, 날짜, 장소, 일정 리스트)
+                    MyPlan plan = new MyPlan(
+                            trip.getTitle(),
+                            trip.getStartDate() + " ~ " + trip.getEndDate(),
+                            trip.getDestination(),
+                            dailySchedules
+                    );
+
+                    Bundle bundle = new Bundle();
+                    bundle.putSerializable("selectedPlan", plan);
+                    getParentFragmentManager().setFragmentResult("planResult", bundle);
+                    dismiss();
+                });
+            }
+
+            @Override
+            public int getItemCount() { return tripList.size(); }
         });
 
-        recyclerView.setAdapter(adapter);
         return view;
+    }
+
+    private static class PlanViewHolder extends RecyclerView.ViewHolder {
+        TextView textView;
+        public PlanViewHolder(@NonNull View itemView) {
+            super(itemView);
+            textView = itemView.findViewById(android.R.id.text1);
+        }
     }
 }

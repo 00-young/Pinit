@@ -9,6 +9,10 @@ public class Schedule {
     private String placeName;
     private String memo;
     private String color;
+    private double latitude;
+    private double longitude;
+    private String googlePlaceId;
+    private String category;
 
     public Schedule() {}
     public int getId() { return id; }
@@ -27,4 +31,28 @@ public class Schedule {
     public void setMemo(String memo) { this.memo = memo; }
     public String getColor() { return color; }
     public void setColor(String color) { this.color = color; }
+    public double getLatitude() {
+        return latitude;
+    }
+    public void setLatitude(double latitude) {
+        this.latitude = latitude;
+    }
+    public double getLongitude() {
+        return longitude;
+    }
+    public void setLongitude(double longitude) {
+        this.longitude = longitude;
+    }
+    public String getGooglePlaceId() {
+        return googlePlaceId;
+    }
+    public void setGooglePlaceId(String googlePlaceId) {
+        this.googlePlaceId = googlePlaceId;
+    }
+    public String getCategory() {
+        return category;
+    }
+    public void setCategory(String category) {
+        this.category = category;
+    }
 }
