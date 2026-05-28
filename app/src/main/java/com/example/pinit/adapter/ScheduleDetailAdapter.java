@@ -14,7 +14,7 @@ import com.example.pinit.model.Schedule;
 
 import java.util.List;
 
-public class ScheduleDetailAdapter extends RecyclerView.Adapter<ScheduleDetailAdapter.ViewHolder> {
+public class  ScheduleDetailAdapter extends RecyclerView.Adapter<ScheduleDetailAdapter.ViewHolder> {
 
     public interface OnMapClickListener { void onMapClick(Schedule schedule); }
     public interface OnDeleteListener { void onDelete(int id); }

@@ -31,7 +31,7 @@ public class MyPlansBottomSheetFragment extends BottomSheetDialogFragment {
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.layout_bottom_sheet_my_plans, container, false); // XML 이름 맞게 수정하세요
+        View view = inflater.inflate(R.layout.layout_bottom_sheet_my_plans, container, false);
 
         RecyclerView rv = view.findViewById(R.id.recyclerViewMyPlans);
         rv.setLayoutManager(new LinearLayoutManager(getContext()));
