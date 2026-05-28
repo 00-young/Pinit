@@ -20,6 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -37,6 +38,11 @@ import com.example.pinit.database.PlacesApiHelper;
 import com.example.pinit.model.DailySchedule;
 import com.example.pinit.model.MyPlan;
 
+import com.example.pinit.model.post.ContentBlock;
+import com.example.pinit.model.post.Post;
+
+import com.example.pinit.repository.PostRepository;
+
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
@@ -46,11 +52,16 @@ import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
 
+import com.google.firebase.Timestamp;
+import com.google.firebase.auth.FirebaseAuth;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -77,6 +88,18 @@ public class CreatePostFragment extends Fragment {
     // 비동기 콜백 인터페이스
     interface GeocodeCallback { void onResult(LatLng latLng); }
 
+    // 게시글 제목
+    private EditText etPostTitle;
+
+    // 업로드 버튼
+    private Button btnUpload;
+
+    // Firebase Repository
+    private final PostRepository postRepository = new PostRepository();
+
+    // 대표 이미지 Uri
+    private Uri thumbnailUri;
+
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -99,9 +122,16 @@ public class CreatePostFragment extends Fragment {
         galleryLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
-                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+
+                    if (result.getResultCode() == Activity.RESULT_OK
+                            && result.getData() != null) {
+
                         Uri imageUri = result.getData().getData();
                         if (imageUri != null && ivSelectedPhoto != null) {
+
+                            // Firebase 업로드용 저장
+                            thumbnailUri = imageUri;
+
                             ivSelectedPhoto.setImageURI(imageUri);
                             ivSelectedPhoto.setVisibility(View.VISIBLE);
                         }
@@ -333,22 +363,42 @@ public class CreatePostFragment extends Fragment {
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.fragment_create_post, container, false);
+    public View onCreateView(
+            @NonNull LayoutInflater inflater,
+            @Nullable ViewGroup container,
+            @Nullable Bundle savedInstanceState
+    ) {
+
+        View view = inflater.inflate(
+                R.layout.fragment_create_post,
+                container,
+                false
+        );
 
         layoutDynamicContent = view.findViewById(R.id.layoutDynamicContent);
         layoutImportedBudget = view.findViewById(R.id.layoutImportedBudget);
         layoutTagsContainer = view.findViewById(R.id.layoutTagsContainer);
         layoutTravelSettingTagsContainer = view.findViewById(R.id.layoutTravelSettingTagsContainer);
         ivSelectedPhoto = view.findViewById(R.id.ivSelectedPhoto);
+        bindHeaderMyPageButton(view);
 
         tvTotalBudget = view.findViewById(R.id.tvTotalBudget);
+        etBudgetAccom = view.findViewById(R.id.etBudgetAccom);
+        etBudgetTransport = view.findViewById(R.id.etBudgetTransport);
         etBudgetFood = view.findViewById(R.id.etBudgetFood);
         etBudgetTransport = view.findViewById(R.id.etBudgetTransport);
         etBudgetAccom = view.findViewById(R.id.etBudgetAccom);
         etBudgetShopping = view.findViewById(R.id.etBudgetShopping);
         etBudgetSightseeing = view.findViewById(R.id.etBudgetSightseeing);
         etBudgetEtc = view.findViewById(R.id.etBudgetEtc);
+
+        // 게시글 제목 EditText
+        etPostTitle = view.findViewById(R.id.etPostTitle);
+
+        // 업로드 버튼
+        btnUpload = view.findViewById(R.id.btnRegister);
+
+        btnUpload.setOnClickListener(v -> uploadPost());
 
         TextWatcher budgetWatcher = new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -404,12 +454,123 @@ public class CreatePostFragment extends Fragment {
         return view;
     }
 
+    // Firebase 업로드 함수
+    private void uploadPost() {
+
+        String title = etPostTitle.getText().toString().trim();
+
+        if (title.isEmpty()) {
+
+            Toast.makeText(
+                    getContext(),
+                    "게시글 제목을 입력하세요",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+        if (thumbnailUri == null) {
+
+            Toast.makeText(
+                    getContext(),
+                    "대표 이미지를 선택하세요",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+        String uid =
+                FirebaseAuth.getInstance().getCurrentUser() != null
+                        ? FirebaseAuth.getInstance()
+                        .getCurrentUser()
+                        .getUid()
+                        : "";
+
+        if (uid.isEmpty()) {
+
+            Toast.makeText(
+                    getContext(),
+                    "로그인이 필요합니다",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+        String postId = UUID.randomUUID().toString();
+
+        Post post = new Post(
+                postId,
+                uid,
+                title,
+                "image",
+                "",
+                Collections.singletonList("여행"),
+                0,
+                0,
+                0,
+                0,
+                false,
+                Timestamp.now()
+        );
+
+        ContentBlock textBlock = new ContentBlock(
+                UUID.randomUUID().toString(),
+                "text",
+                "게시글 내용",
+                "",
+                null,
+                0
+        );
+
+        List<ContentBlock> blocks =
+                Collections.singletonList(textBlock);
+
+        postRepository.uploadPost(
+
+                post,
+
+                thumbnailUri,
+
+                blocks,
+
+                () -> {
+
+                    Toast.makeText(
+                            getContext(),
+                            "업로드 성공",
+                            Toast.LENGTH_SHORT
+                    ).show();
+
+                    return null;
+                },
+
+                e -> {
+
+                    Toast.makeText(
+                            getContext(),
+                            "업로드 실패",
+                            Toast.LENGTH_SHORT
+                    ).show();
+
+                    return null;
+                }
+        );
+    }
+
+    private void bindHeaderMyPageButton(View rootView) {
+        if (!(rootView instanceof LinearLayout)) return;
+    }
+
     private void addTravelSettingTag(String text) {
-        if (text == null || text.trim().isEmpty() || text.equals("날짜를 선택하세요")) return;
+        if (text == null
+                || text.trim().isEmpty()
+                || text.equals("날짜를 선택하세요")) return;
         TextView tvTag = new TextView(getContext());
         tvTag.setText(text);
         tvTag.setTextColor(0xFF333333);
-
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(0xFFFFFFFF);
         drawable.setStroke(2, 0xFFDDDDDD);
@@ -417,13 +578,18 @@ public class CreatePostFragment extends Fragment {
         tvTag.setBackground(drawable);
         tvTag.setPadding(32, 12, 32, 12);
 
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                );
+
         params.setMargins(0, 0, 16, 0);
         tvTag.setLayoutParams(params);
         layoutTravelSettingTagsContainer.addView(tvTag);
     }
 
+    // 🌟 요구사항 1: 예산 합산 로직 함수
     private void calculateTotalBudget() {
         int food = parseBudgetNumber(etBudgetFood.getText().toString());
         int transport = parseBudgetNumber(etBudgetTransport.getText().toString());
@@ -435,6 +601,7 @@ public class CreatePostFragment extends Fragment {
         tvTotalBudget.setText("총 " + total + "만원");
     }
 
+    // 공백이나 문자가 들어왔을 때 앱이 튕기지 않게 안전하게 0으로 변환해주는 함수
     private int parseBudgetNumber(String text) {
         try { return (text == null || text.trim().isEmpty()) ? 0 : Integer.parseInt(text.trim()); }
         catch (NumberFormatException e) { return 0; }
