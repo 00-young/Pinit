@@ -26,6 +26,12 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
 import com.example.pinit.data.MyFollow;
+import com.example.pinit.model.User;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
@@ -35,14 +41,10 @@ import java.util.List;
 
 public class MyPageFragment extends Fragment {
 
-    private static final String PREFS_NAME = "UserPrefs";
-    private static final String KEY_NICKNAME = "nickname";
-    private static final String KEY_BIO = "bio";
-    private static final String KEY_AVATAR_URI = "avatar_uri";
-    private static final String DEFAULT_NICKNAME = "User_1234567";
-    private static final String DEFAULT_BIO = "Pinit is good";
-    private static final String LEGACY_DEFAULT_NICKNAME = "\uB0C9\uB3D9\uB41C \uBE14\uB8E8\uBCA0\uB9AC";
-    private static final String LEGACY_DEFAULT_BIO = "\uC5EC\uD589 \uAE30\uB85D\uC744 \uCC28\uACE1\uCC28\uACE1 \uBAA8\uC73C\uB294 \uC911";
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
+    private ListenerRegistration userListener;
+    private User currentUser;
 
     private ImageView profileAvatar;
     private TextView profileName;
@@ -57,6 +59,9 @@ public class MyPageFragment extends Fragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
+
         profileImageLauncher = registerForActivityResult(
                 new ActivityResultContracts.OpenDocument(),
                 uri -> {
@@ -84,7 +89,7 @@ public class MyPageFragment extends Fragment {
         followerCount = view.findViewById(R.id.followerCount);
         followingCount = view.findViewById(R.id.followingCount);
 
-        myPostAdapter = new MyPostAdapter(createDummyPosts(getNickname()));
+        myPostAdapter = new MyPostAdapter(new ArrayList<>());
         RecyclerView recyclerView = view.findViewById(R.id.myPostRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerView.setAdapter(myPostAdapter);
@@ -105,9 +110,49 @@ public class MyPageFragment extends Fragment {
                         .replace(R.id.fragmentContainer, new MyScrapFragment())
                         .addToBackStack(null)
                         .commit());
-        renderProfile();
+
+        view.findViewById(R.id.btnLogout).setOnClickListener(v -> {
+            mAuth.signOut();
+            androidx.appcompat.app.AppCompatActivity activity = (androidx.appcompat.app.AppCompatActivity) requireActivity();
+            activity.finish();
+            // Assuming LoginActivity will be started by the system or next restart
+        });
+
+        // TODO: 개발 완료 후 삭제 예정 (테스트용)
+        view.findViewById(R.id.btnTestUsers).setOnClickListener(v -> {
+            startActivity(new android.content.Intent(getContext(), com.example.pinit.activity.TestUserListActivity.class));
+        });
+
+        setupUserListener();
 
         return view;
+    }
+
+    private void setupUserListener() {
+        if (mAuth.getCurrentUser() == null) return;
+
+        String email = mAuth.getCurrentUser().getEmail();
+        if (email == null) return;
+
+        userListener = db.collection("users").document(email)
+                .addSnapshotListener((snapshot, e) -> {
+                    if (e != null) {
+                        return;
+                    }
+
+                    if (snapshot != null && snapshot.exists()) {
+                        currentUser = snapshot.toObject(User.class);
+                        renderProfile();
+                    }
+                });
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (userListener != null) {
+            userListener.remove();
+        }
     }
 
     private List<MyPost> createDummyPosts(String userName) {
@@ -148,59 +193,44 @@ public class MyPageFragment extends Fragment {
     }
 
     private void renderProfile() {
-        profileName.setText(getNickname());
-        profileBio.setText(getBio());
+        if (currentUser == null) return;
 
-        String avatarUri = getPrefs().getString(KEY_AVATAR_URI, "");
-        if (avatarUri == null || avatarUri.isEmpty()) {
-            profileAvatar.setImageDrawable(null);
+        profileName.setText(currentUser.getNickname());
+        profileBio.setText(currentUser.getBio());
+
+        String avatarUrl = currentUser.getProfileImageUrl();
+        if (avatarUrl == null || avatarUrl.isEmpty()) {
+            // Using a placeholder or existing drawable if available
+            profileAvatar.setImageResource(R.drawable.bg_profile_avatar);
         } else {
-            profileAvatar.setImageURI(Uri.parse(avatarUri));
+            try {
+                profileAvatar.setImageURI(Uri.parse(avatarUrl));
+            } catch (Exception e) {
+                // Handle image loading error
+            }
         }
 
         if (myPostAdapter != null) {
-            myPostAdapter.updatePosts(createDummyPosts(getNickname()));
+            myPostAdapter.updatePosts(createDummyPosts(currentUser.getNickname()));
         }
-        followerCount.setText(String.valueOf(MyFollow.getFollowerCount()));
-        followingCount.setText(String.valueOf(MyFollow.getFollowingCount(requireContext())));
-    }
-
-    private String getNickname() {
-        return getProfileValue(KEY_NICKNAME, DEFAULT_NICKNAME, LEGACY_DEFAULT_NICKNAME);
-    }
-
-    private String getBio() {
-        return getProfileValue(KEY_BIO, DEFAULT_BIO, LEGACY_DEFAULT_BIO);
-    }
-
-    private String getProfileValue(String key, String defaultValue, String legacyDefaultValue) {
-        String value = getPrefs().getString(key, defaultValue);
-        if (value == null || value.trim().isEmpty()
-                || legacyDefaultValue.equals(value)
-                || value.startsWith("\uC5EC\uD589 \uAE30\uB85D\uC744 \uCC28\uACE1\uCC28\uACE1")) {
-            getPrefs().edit().putString(key, defaultValue).apply();
-            return defaultValue;
-        }
-        return value;
-    }
-
-    private SharedPreferences getPrefs() {
-        return requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        followerCount.setText(String.valueOf(currentUser.getFollowerCount()));
+        followingCount.setText(String.valueOf(currentUser.getFollowingCount()));
     }
 
     private void showEditProfileDialog() {
+        if (currentUser == null) return;
+
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_edit_profile, null, false);
         dialogAvatarPreview = dialogView.findViewById(R.id.editProfileAvatar);
         EditText editName = dialogView.findViewById(R.id.editProfileName);
         EditText editBio = dialogView.findViewById(R.id.editProfileBio);
         Button chooseImage = dialogView.findViewById(R.id.btnChooseProfileImage);
 
-        SharedPreferences prefs = getPrefs();
-        editName.setText(getNickname());
-        editBio.setText(getBio());
+        editName.setText(currentUser.getNickname());
+        editBio.setText(currentUser.getBio());
 
-        String savedAvatar = prefs.getString(KEY_AVATAR_URI, "");
-        pendingAvatarUri = savedAvatar == null || savedAvatar.isEmpty() ? null : Uri.parse(savedAvatar);
+        String currentAvatar = currentUser.getProfileImageUrl();
+        pendingAvatarUri = (currentAvatar == null || currentAvatar.isEmpty()) ? null : Uri.parse(currentAvatar);
         if (pendingAvatarUri != null) {
             dialogAvatarPreview.setImageURI(pendingAvatarUri);
         }
@@ -208,25 +238,38 @@ public class MyPageFragment extends Fragment {
         chooseImage.setOnClickListener(v -> profileImageLauncher.launch(new String[]{"image/*"}));
 
         new AlertDialog.Builder(requireContext())
-                .setTitle("\uD504\uB85C\uD544 \uC218\uC815")
+                .setTitle("프로필 수정")
                 .setView(dialogView)
-                .setNegativeButton("\uCDE8\uC18C", (dialog, which) -> clearDialogState())
-                .setPositiveButton("\uC800\uC7A5", (dialog, which) -> {
-                    String nickname = editName.getText().toString().trim();
-                    String bio = editBio.getText().toString().trim();
-                    if (nickname.isEmpty()) nickname = DEFAULT_NICKNAME;
-                    if (bio.isEmpty()) bio = DEFAULT_BIO;
+                .setNegativeButton("취소", (dialog, which) -> clearDialogState())
+                .setPositiveButton("저장", (dialog, which) -> {
+                    String newNickname = editName.getText().toString().trim();
+                    String newBio = editBio.getText().toString().trim();
 
-                    SharedPreferences.Editor editor = prefs.edit()
-                            .putString(KEY_NICKNAME, nickname)
-                            .putString(KEY_BIO, bio);
-                    if (pendingAvatarUri != null) {
-                        editor.putString(KEY_AVATAR_URI, pendingAvatarUri.toString());
+                    if (newNickname.isEmpty()) {
+                        Toast.makeText(getContext(), "닉네임을 입력해주세요.", Toast.LENGTH_SHORT).show();
+                        return;
                     }
-                    editor.apply();
 
-                    clearDialogState();
-                    renderProfile();
+                    DocumentReference userRef = db.collection("users").document(currentUser.getEmail());
+                    
+                    java.util.Map<String, Object> updates = new java.util.HashMap<>();
+                    updates.put("nickname", newNickname);
+                    updates.put("bio", newBio);
+                    updates.put("updatedAt", FieldValue.serverTimestamp());
+                    
+                    if (pendingAvatarUri != null) {
+                        updates.put("profileImageUrl", pendingAvatarUri.toString());
+                    }
+
+                    userRef.update(updates)
+                            .addOnSuccessListener(aVoid -> {
+                                Toast.makeText(getContext(), "프로필이 수정되었습니다.", Toast.LENGTH_SHORT).show();
+                                clearDialogState();
+                            })
+                            .addOnFailureListener(e -> {
+                                Toast.makeText(getContext(), "저장 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                clearDialogState();
+                            });
                 })
                 .show();
     }

@@ -12,13 +12,11 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.pinit.R;
+import com.example.pinit.manager.FirebaseManager;
+import com.example.pinit.model.User;
+import com.example.pinit.util.NotificationPermissionHelper;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.SetOptions;
-
-import java.util.HashMap;
-import java.util.Map;
 
 // [화면] 앱 최초 진입점 - Firebase 이메일/비밀번호 로그인 및 회원가입
 // 이미 로그인된 계정이 있으면 onStart()에서 바로 MainActivity로 이동 (자동 로그인)
@@ -29,7 +27,7 @@ public class LoginActivity extends AppCompatActivity {
     private Button btnLogin, btnRegister;
     private ProgressBar progressBar;
     private FirebaseAuth mAuth; // Firebase 인증 인스턴스
-    private FirebaseFirestore db;
+    private NotificationPermissionHelper permissionHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,7 +35,7 @@ public class LoginActivity extends AppCompatActivity {
         setContentView(R.layout.activity_login);
 
         mAuth = FirebaseAuth.getInstance();
-        db = FirebaseFirestore.getInstance();
+        permissionHelper = new NotificationPermissionHelper(this);
 
         etEmail    = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
@@ -53,10 +51,12 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        FirebaseUser currentUser = mAuth.getCurrentUser();
+        // TODO: 로그인 테스트용 자동 로그인 기능 정지(항상 로그인 화면으로 가게), 나중에 주석 처리만 없애면 됨
+       /* FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser != null) {
             goToMain();
         }
+        */
     }
 
     // 이메일/비밀번호로 Firebase 로그인 시도
@@ -82,12 +82,6 @@ public class LoginActivity extends AppCompatActivity {
                     btnRegister.setEnabled(true);
 
                     if (task.isSuccessful()) {
-
-                        FirebaseUser user =
-                                mAuth.getCurrentUser();
-
-                        saveUserToFirestore(user);
-
                         goToMain();
                     } else {
                         String msg = task.getException() != null
@@ -119,23 +113,43 @@ public class LoginActivity extends AppCompatActivity {
 
         mAuth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(task -> {
-                    progressBar.setVisibility(View.GONE);
-                    btnLogin.setEnabled(true);
-                    btnRegister.setEnabled(true);
-
                     if (task.isSuccessful()) {
+                        FirebaseUser firebaseUser = mAuth.getCurrentUser();
+                        if (firebaseUser != null) {
+                            User newUser = new User();
+                            newUser.setEmail(firebaseUser.getEmail());
+                            // Nickname will be handled inside FirebaseManager.createNewUser
 
-                        FirebaseUser user =
-                                mAuth.getCurrentUser();
+                            FirebaseManager.getInstance().createNewUser(newUser, new FirebaseManager.OnActionListener() {
+                                @Override
+                                public void onSuccess() {
+                                    progressBar.setVisibility(View.GONE);
+                                    btnLogin.setEnabled(true);
+                                    btnRegister.setEnabled(true);
+                                    Toast.makeText(LoginActivity.this, "회원가입 완료! 로그인합니다.", Toast.LENGTH_SHORT).show();
+                                    
+                                    // 🔔 회원가입 성공 직후, 알림 권한 요청 후 메인으로 이동
+                                    permissionHelper.requestNotificationPermission(() -> goToMain());
+                                }
 
-                        saveUserToFirestore(user);
-
-                        Toast.makeText(this,
-                                "회원가입 완료! 로그인합니다.",
-                                Toast.LENGTH_SHORT).show();
-
-                        goToMain();
+                                @Override
+                                public void onFailure(Exception e) {
+                                    progressBar.setVisibility(View.GONE);
+                                    btnLogin.setEnabled(true);
+                                    btnRegister.setEnabled(true);
+                                    
+                                    // If Firestore fails, delete the Auth account to avoid "ghost" accounts
+                                    firebaseUser.delete();
+                                    
+                                    String msg = e != null ? e.getMessage() : "DB 생성 실패";
+                                    Toast.makeText(LoginActivity.this, "회원가입 실패 (DB): " + msg, Toast.LENGTH_LONG).show();
+                                }
+                            });
+                        }
                     } else {
+                        progressBar.setVisibility(View.GONE);
+                        btnLogin.setEnabled(true);
+                        btnRegister.setEnabled(true);
                         String msg = task.getException() != null
                                 ? task.getException().getMessage() : "회원가입 실패";
                         Toast.makeText(this, "회원가입 실패: " + msg, Toast.LENGTH_LONG).show();
@@ -143,47 +157,11 @@ public class LoginActivity extends AppCompatActivity {
                 });
     }
 
-    private void saveUserToFirestore(FirebaseUser user) {
-
-        if (user == null) return;
-
-        String uid = user.getUid();
-
-        String email = user.getEmail();
-
-        Map<String, Object> userMap =
-                new HashMap<>();
-
-        userMap.put("email", email);
-
-        // 기본값
-        userMap.put("nickname",
-                email != null
-                        ? email.split("@")[0]
-                        : "user");
-
-        userMap.put("profileImageUrl", "");
-        userMap.put("bio", "");
-
-        userMap.put("followerCount", 0);
-        userMap.put("followingCount", 0);
-        userMap.put("postCount", 0);
-        userMap.put("scrapCount", 0);
-
-        userMap.put("isPrivate", false);
-
-        long now = System.currentTimeMillis();
-
-        userMap.put("createdAt", now);
-        userMap.put("updatedAt", now);
-
-        db.collection("users")
-                .document(uid)
-                .set(userMap, SetOptions.merge());
-    }
-
     // MainActivity로 이동 후 현재 Activity 종료 (백 스택에서 제거 → 뒤로가기로 복귀 불가)
     private void goToMain() {
+        // 로그인 성공 시 FCM 토큰 업데이트 수행
+        FirebaseManager.getInstance().updateFcmToken();
+
         startActivity(new Intent(this, MainActivity.class));
         finish();
     }
