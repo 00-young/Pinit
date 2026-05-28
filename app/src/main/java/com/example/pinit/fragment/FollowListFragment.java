@@ -13,13 +13,19 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
-import com.example.pinit.data.MyFollow;
+import com.example.pinit.manager.FirebaseManager;
+import com.example.pinit.model.User;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class FollowListFragment extends Fragment {
     private static final String ARG_MODE = "mode";
+    private static final String ARG_USER_EMAIL = "user_email";
     private static final String MODE_FOLLOWERS = "followers";
     private static final String MODE_FOLLOWING = "following";
 
@@ -27,19 +33,32 @@ public class FollowListFragment extends Fragment {
     private RecyclerView recyclerView;
     private TextView emptyText;
     private String mode;
+    private String userEmail;
+    private ListenerRegistration followListener;
 
     public static FollowListFragment newFollowers() {
-        return newInstance(MODE_FOLLOWERS);
+        String email = (FirebaseAuth.getInstance().getCurrentUser() != null) ? FirebaseAuth.getInstance().getCurrentUser().getEmail() : null;
+        return newInstance(MODE_FOLLOWERS, email);
+    }
+
+    public static FollowListFragment newFollowers(String email) {
+        return newInstance(MODE_FOLLOWERS, email);
     }
 
     public static FollowListFragment newFollowing() {
-        return newInstance(MODE_FOLLOWING);
+        String email = (FirebaseAuth.getInstance().getCurrentUser() != null) ? FirebaseAuth.getInstance().getCurrentUser().getEmail() : null;
+        return newInstance(MODE_FOLLOWING, email);
     }
 
-    private static FollowListFragment newInstance(String mode) {
+    public static FollowListFragment newFollowing(String email) {
+        return newInstance(MODE_FOLLOWING, email);
+    }
+
+    private static FollowListFragment newInstance(String mode, String email) {
         FollowListFragment fragment = new FollowListFragment();
         Bundle args = new Bundle();
         args.putString(ARG_MODE, mode);
+        args.putString(ARG_USER_EMAIL, email);
         fragment.setArguments(args);
         return fragment;
     }
@@ -48,72 +67,101 @@ public class FollowListFragment extends Fragment {
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_follow_list, container, false);
-        mode = getArguments() == null ? MODE_FOLLOWERS : getArguments().getString(ARG_MODE, MODE_FOLLOWERS);
+        Bundle args = getArguments();
+        mode = (args != null) ? args.getString(ARG_MODE, MODE_FOLLOWERS) : MODE_FOLLOWERS;
+        userEmail = (args != null) ? args.getString(ARG_USER_EMAIL) : null;
+        
+        if (userEmail == null && FirebaseAuth.getInstance().getCurrentUser() != null) {
+            userEmail = FirebaseAuth.getInstance().getCurrentUser().getEmail();
+        }
 
         TextView title = view.findViewById(R.id.followListTitle);
         emptyText = view.findViewById(R.id.emptyFollowText);
         recyclerView = view.findViewById(R.id.followRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        title.setText(MODE_FOLLOWING.equals(mode) ? "\uD314\uB85C\uC6B0" : "\uD314\uB85C\uC6CC");
+        title.setText(MODE_FOLLOWING.equals(mode) ? "팔로우" : "팔로워");
         view.findViewById(R.id.btnBack).setOnClickListener(v -> getParentFragmentManager().popBackStack());
 
-        adapter = new FollowUserAdapter(new ArrayList<>(), () -> renderList());
+        adapter = new FollowUserAdapter(new ArrayList<>(), mode);
         recyclerView.setAdapter(adapter);
-        renderList();
+        setupFollowListener();
 
         return view;
     }
 
-    private void renderList() {
-        List<FollowUser> users = createUsers();
+    private void setupFollowListener() {
+        if (userEmail == null) return;
+
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        String subCollection = MODE_FOLLOWING.equals(mode) ? "follows" : "followers";
+
+        followListener = db.collection("users").document(userEmail).collection(subCollection)
+                .addSnapshotListener((snapshots, e) -> {
+                    if (e != null || snapshots == null) return;
+
+                    if (snapshots.isEmpty()) {
+                        updateUI(new ArrayList<>());
+                        return;
+                    }
+
+                    List<FollowUser> users = new ArrayList<>();
+                    java.util.concurrent.atomic.AtomicInteger count = new java.util.concurrent.atomic.AtomicInteger(snapshots.size());
+
+                    for (DocumentSnapshot doc : snapshots.getDocuments()) {
+                        String userEmail = doc.getId();
+                        db.collection("users").document(userEmail).get()
+                                .addOnSuccessListener(userDoc -> {
+                                    if (userDoc.exists()) {
+                                        User user = userDoc.toObject(User.class);
+                                        if (user != null) {
+                                            users.add(new FollowUser(user.getEmail(), user.getNickname(), user.getBio()));
+                                        }
+                                    }
+                                    if (count.decrementAndGet() == 0) {
+                                        updateUI(users);
+                                    }
+                                })
+                                .addOnFailureListener(err -> {
+                                    if (count.decrementAndGet() == 0) {
+                                        updateUI(users);
+                                    }
+                                });
+                    }
+                });
+    }
+
+    private void updateUI(List<FollowUser> users) {
+        if (!isAdded()) return;
         adapter.updateUsers(users);
         emptyText.setText(MODE_FOLLOWING.equals(mode)
-                ? "\uD314\uB85C\uC6B0\uD55C \uC0AC\uB78C\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-                : "\uD314\uB85C\uC6CC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.");
+                ? "팔로우한 사람이 없습니다."
+                : "팔로워가 없습니다.");
         emptyText.setVisibility(users.isEmpty() ? View.VISIBLE : View.GONE);
         recyclerView.setVisibility(users.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
-    private List<FollowUser> createUsers() {
-        List<FollowUser> allUsers = new ArrayList<>();
-        allUsers.add(new FollowUser(
-                MyFollow.USER_PEACH,
-                "\uD138\uD138\uD55C \uBCF5\uC22D\uC544",
-                "\uAC00\uBCBC\uC6B4 \uC77C\uC815\uC73C\uB85C \uB0A8\uAE30\uB294 \uC5EC\uD589 \uAE30\uB85D"
-        ));
-        allUsers.add(new FollowUser(
-                MyFollow.USER_MINT,
-                "\uC0C1\uD07C\uD55C \uBBFC\uD2B8",
-                "\uC8FC\uB9D0\uB9C8\uB2E4 \uC791\uC740 \uB3C4\uC2DC\uB97C \uAC78\uC5B4\uBCF4\uB294 \uC911"
-        ));
-
-        if (MODE_FOLLOWERS.equals(mode)) {
-            return allUsers;
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (followListener != null) {
+            followListener.remove();
         }
-
-        List<FollowUser> followingUsers = new ArrayList<>();
-        for (FollowUser user : allUsers) {
-            if (MyFollow.isFollowing(requireContext(), user.userId)) {
-                followingUsers.add(user);
-            }
-        }
-        return followingUsers;
     }
 
     private static class FollowUserAdapter extends RecyclerView.Adapter<FollowUserAdapter.ViewHolder> {
         private final List<FollowUser> users;
-        private final Runnable onFollowChanged;
+        private final String mode;
 
-        FollowUserAdapter(List<FollowUser> users, Runnable onFollowChanged) {
+        FollowUserAdapter(List<FollowUser> users, String mode) {
             this.users = users;
-            this.onFollowChanged = onFollowChanged;
+            this.mode = mode;
         }
 
         void updateUsers(List<FollowUser> newUsers) {
             users.clear();
             users.addAll(newUsers);
-            notifyDataSetChanged();
+            notifyDataSetChanged(); // 실시간 리스너 갱신 시 완전히 도화지를 새로 그림
         }
 
         @NonNull
@@ -129,13 +177,17 @@ public class FollowListFragment extends Fragment {
             holder.name.setText(user.name);
             holder.bio.setText(user.bio);
             holder.avatar.setImageDrawable(null);
-            renderButton(holder.actionButton, user);
+
+            // 버튼 상태 초기화 보장
+            FirebaseManager.getInstance().checkFollowing(user.userId, isFollowing -> {
+                holder.actionButton.setText(isFollowing ? "언팔로우하기" : "팔로우하기");
+            });
 
             View.OnClickListener openProfile = v -> {
                 androidx.appcompat.app.AppCompatActivity activity =
                         (androidx.appcompat.app.AppCompatActivity) v.getContext();
                 activity.getSupportFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance(user.name))
+                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(user.userId))
                         .addToBackStack(null)
                         .commit();
             };
@@ -144,20 +196,48 @@ public class FollowListFragment extends Fragment {
             holder.bio.setOnClickListener(openProfile);
 
             holder.actionButton.setOnClickListener(v -> {
-                boolean nextFollowing = !MyFollow.isFollowing(v.getContext(), user.userId);
-                MyFollow.setFollowing(v.getContext(), user.userId, nextFollowing);
-                onFollowChanged.run();
+                int pos = holder.getBindingAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION) return;
+
+                // 클릭 연타 및 타임 지연 방지를 위해 버튼을 우선 비활성화
+                holder.actionButton.setEnabled(false);
+
+                FirebaseManager.getInstance().checkFollowing(user.userId, isFollowing -> {
+                    if (isFollowing) {
+                        FirebaseManager.getInstance().unfollowUser(user.userId, new FirebaseManager.OnActionListener() {
+                            @Override
+                            public void onSuccess() {
+                                // 🛠️ 버그 완전 저격 수술 핵심 구역
+                                // 팔로잉 탭이든 아니든 로컬에서 리스트를 수동으로 자르지 마세요!
+                                // 서버 데이터가 지워지면 상단의 실시간 addSnapshotListener가 감지하여
+                                // 알아서 부드럽게 UI를 새로 리로드 해줍니다. 버튼을 다시 활성화만 시킵니다.
+                                holder.actionButton.setEnabled(true);
+                            }
+                            @Override
+                            public void onFailure(Exception e) {
+                                holder.actionButton.setEnabled(true);
+                            }
+                        });
+                    } else {
+                        FirebaseManager.getInstance().followUser(user.userId, new FirebaseManager.OnActionListener() {
+                            @Override
+                            public void onSuccess() {
+                                holder.actionButton.setEnabled(true);
+                                holder.actionButton.setText("언팔로우하기");
+                            }
+                            @Override
+                            public void onFailure(Exception e) {
+                                holder.actionButton.setEnabled(true);
+                            }
+                        });
+                    }
+                });
             });
         }
 
         @Override
         public int getItemCount() {
             return users.size();
-        }
-
-        private void renderButton(TextView button, FollowUser user) {
-            boolean following = MyFollow.isFollowing(button.getContext(), user.userId);
-            button.setText(following ? "\uC5B8\uD314\uB85C\uC6B0\uD558\uAE30" : "\uD314\uB85C\uC6B0\uD558\uAE30");
         }
 
         private static class ViewHolder extends RecyclerView.ViewHolder {
