@@ -298,27 +298,20 @@ public class PlaceFragment extends Fragment {
         FirestoreRepository repository =
                 new FirestoreRepository();
 
+        FirebaseUser user =
+                FirebaseAuth.getInstance().getCurrentUser();
+
+        if (user == null) return;
+
+        String userId = user.getUid();
+
         String scheduleId =
-                String.valueOf(trip.getId());
+                userId + "_" + trip.getId();
 
         String dayId = schedule.getDate();
 
         String itemId =
                 "item" + insertedId;
-
-        // =========================
-        // Firebase uid 연결
-        // =========================
-
-        FirebaseUser user =
-                FirebaseAuth.getInstance()
-                        .getCurrentUser();
-
-        String userId = "";
-
-        if (user != null) {
-            userId = user.getUid();
-        }
 
         // =========================
         // 여행 전체(schedule) 업로드
