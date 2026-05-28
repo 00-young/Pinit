@@ -54,4 +54,5 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation "com.google.guava:guava:31.1-android"
+    implementation 'com.google.firebase:firebase-messaging:24.0.0'
 }

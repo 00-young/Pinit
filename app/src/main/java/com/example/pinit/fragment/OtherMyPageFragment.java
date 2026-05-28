@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -16,9 +17,14 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
-import com.example.pinit.data.MyFollow;
+import com.example.pinit.manager.FirebaseManager;
+import com.example.pinit.model.User;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,16 +32,34 @@ import java.util.List;
 
 public class OtherMyPageFragment extends Fragment {
     private static final String ARG_USER_NAME = "user_name";
-    private static final String DEFAULT_USER_NAME = "\uD138\uD138\uD55C \uBCF5\uC22D\uC544";
-    private static final String DEFAULT_BIO = "\uAC00\uBCBC\uC6B4 \uC77C\uC815\uC73C\uB85C \uB0A8\uAE30\uB294 \uC5EC\uD589 \uAE30\uB85D";
+    private static final String ARG_USER_EMAIL = "user_email";
+    private static final String DEFAULT_USER_NAME = "털털한 복숭아";
+    private static final String DEFAULT_BIO = "가벼운 일정으로 남기는 여행 기록";
 
     private TextView btnFollow;
     private TextView followerCount;
+    private TextView followingCount;
+    private TextView profileName;
+    private TextView profileBio;
+    private ImageView profileAvatar;
+    
+    private String userEmail;
+    private String userName;
+    private User targetUser;
+    private ListenerRegistration userListener;
 
     public static OtherMyPageFragment newInstance(String userName) {
         OtherMyPageFragment fragment = new OtherMyPageFragment();
         Bundle args = new Bundle();
-        args.putString(ARG_USER_NAME, userName == null || userName.trim().isEmpty() ? DEFAULT_USER_NAME : userName);
+        args.putString(ARG_USER_NAME, userName);
+        fragment.setArguments(args);
+        return fragment;
+    }
+
+    public static OtherMyPageFragment newInstanceWithEmail(String email) {
+        OtherMyPageFragment fragment = new OtherMyPageFragment();
+        Bundle args = new Bundle();
+        args.putString(ARG_USER_EMAIL, email);
         fragment.setArguments(args);
         return fragment;
     }
@@ -45,71 +69,140 @@ public class OtherMyPageFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_my_page, container, false);
 
-        String userName = getUserName();
-        ImageView profileAvatar = view.findViewById(R.id.profileAvatar);
-        TextView profileName = view.findViewById(R.id.profileName);
-        TextView profileBio = view.findViewById(R.id.profileBio);
-        TextView followingCount = view.findViewById(R.id.followingCount);
-        btnFollow = view.findViewById(R.id.btnEditProfile);
-        TextView btnNotification = view.findViewById(R.id.btnMyScrap);
+        profileAvatar = view.findViewById(R.id.profileAvatar);
+        profileName = view.findViewById(R.id.profileName);
+        profileBio = view.findViewById(R.id.profileBio);
+        followingCount = view.findViewById(R.id.followingCount);
         followerCount = view.findViewById(R.id.followerCount);
+        btnFollow = view.findViewById(R.id.btnEditProfile);
+        TextView btnScrap = view.findViewById(R.id.btnMyScrap);
+        
+        // "내 스크랩" 버튼 비활성화 (상대방 페이지이므로)
+        btnScrap.setVisibility(View.GONE);
+        view.findViewById(R.id.btnLogout).setVisibility(View.GONE);
 
-        profileAvatar.setImageDrawable(null);
-        profileName.setText(userName);
-        profileBio.setText(DEFAULT_BIO);
-        followingCount.setText("0");
+        Bundle args = getArguments();
+        if (args != null) {
+            userEmail = args.getString(ARG_USER_EMAIL);
+            userName = args.getString(ARG_USER_NAME);
+        }
 
-        btnFollow.setOnClickListener(v -> toggleFollow());
-        btnNotification.setText("");
-        btnNotification.setOnClickListener(null);
-        btnNotification.setClickable(false);
-        btnNotification.setFocusable(false);
-        btnNotification.setEnabled(false);
+        if (userEmail != null) {
+            setupUserListener(userEmail);
+        } else if (userName != null) {
+            searchUserByName(userName);
+        }
 
         RecyclerView recyclerView = view.findViewById(R.id.myPostRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        recyclerView.setAdapter(new OtherPostAdapter(createDummyPosts(userName)));
+        // 임시 더미 포스트
+        recyclerView.setAdapter(new OtherPostAdapter(createDummyPosts(userName != null ? userName : "User")));
 
-        renderFollowState();
+        // 내비게이션 비활성화: 상대방의 팔로워/팔로잉 목록은 볼 수 없게 하고 숫자만 표시
+        view.findViewById(R.id.btnFollowers).setOnClickListener(null);
+        view.findViewById(R.id.btnFollowers).setClickable(false);
+        view.findViewById(R.id.btnFollowers).setFocusable(false);
+        
+        view.findViewById(R.id.btnFollowing).setOnClickListener(null);
+        view.findViewById(R.id.btnFollowing).setClickable(false);
+        view.findViewById(R.id.btnFollowing).setFocusable(false);
+
         return view;
     }
 
-    private String getUserName() {
-        Bundle args = getArguments();
-        if (args == null) return DEFAULT_USER_NAME;
-        String userName = args.getString(ARG_USER_NAME, DEFAULT_USER_NAME);
-        return userName == null || userName.trim().isEmpty() ? DEFAULT_USER_NAME : userName;
+    private void searchUserByName(String name) {
+        FirebaseFirestore.getInstance().collection("users")
+                .whereEqualTo("nickname", name)
+                .limit(1)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    if (!queryDocumentSnapshots.isEmpty()) {
+                        QueryDocumentSnapshot doc = (QueryDocumentSnapshot) queryDocumentSnapshots.getDocuments().get(0);
+                        userEmail = doc.getId();
+                        setupUserListener(userEmail);
+                    } else {
+                        profileName.setText(name);
+                        profileBio.setText("사용자를 찾을 수 없습니다.");
+                    }
+                });
     }
 
-    private void toggleFollow() {
-        boolean nextFollowing = !MyFollow.isFollowing(requireContext(), MyFollow.USER_PEACH);
-        MyFollow.setFollowing(requireContext(), MyFollow.USER_PEACH, nextFollowing);
-        renderFollowState();
+    private void setupUserListener(String email) {
+        if (userListener != null) userListener.remove();
+        
+        userListener = FirebaseFirestore.getInstance().collection("users").document(email)
+                .addSnapshotListener((snapshot, e) -> {
+                    if (e != null || snapshot == null || !snapshot.exists()) return;
+                    targetUser = snapshot.toObject(User.class);
+                    if (targetUser != null) {
+                        renderUser();
+                    }
+                });
     }
 
-    private void renderFollowState() {
-        boolean following = MyFollow.isFollowing(requireContext(), MyFollow.USER_PEACH);
-        btnFollow.setText(following ? "\uC5B8\uD314\uB85C\uC6B0\uD558\uAE30" : "\uD314\uB85C\uC6B0\uD558\uAE30");
-        followerCount.setText(following ? "1" : "0");
+    private void renderUser() {
+        profileName.setText(targetUser.getNickname());
+        profileBio.setText(targetUser.getBio());
+        followerCount.setText(String.valueOf(targetUser.getFollowerCount()));
+        followingCount.setText(String.valueOf(targetUser.getFollowingCount()));
+        
+        // 프로필 이미지 로드 (Glide 등이 없으므로 Placeholder 또는 URI 처리)
+        if (targetUser.getProfileImageUrl() != null && !targetUser.getProfileImageUrl().isEmpty()) {
+            try {
+                profileAvatar.setImageURI(android.net.Uri.parse(targetUser.getProfileImageUrl()));
+            } catch (Exception e) {
+                profileAvatar.setImageResource(R.drawable.bg_profile_avatar);
+            }
+        } else {
+            profileAvatar.setImageResource(R.drawable.bg_profile_avatar);
+        }
+
+        // 팔로우 버튼 상태 업데이트
+        FirebaseManager.getInstance().checkFollowing(targetUser.getEmail(), isFollowing -> {
+            btnFollow.setText(isFollowing ? "언팔로우하기" : "팔로우하기");
+            btnFollow.setOnClickListener(v -> {
+                if (isFollowing) {
+                    FirebaseManager.getInstance().unfollowUser(targetUser.getEmail(), new FirebaseManager.OnActionListener() {
+                        @Override
+                        public void onSuccess() {
+                            Toast.makeText(getContext(), "언팔로우했습니다.", Toast.LENGTH_SHORT).show();
+                        }
+                        @Override
+                        public void onFailure(Exception e) {
+                            Toast.makeText(getContext(), "실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                } else {
+                    FirebaseManager.getInstance().followUser(targetUser.getEmail(), new FirebaseManager.OnActionListener() {
+                        @Override
+                        public void onSuccess() {
+                            Toast.makeText(getContext(), "팔로우했습니다.", Toast.LENGTH_SHORT).show();
+                        }
+                        @Override
+                        public void onFailure(Exception e) {
+                            Toast.makeText(getContext(), "실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (userListener != null) userListener.remove();
     }
 
     private List<OtherPost> createDummyPosts(String userName) {
         List<OtherPost> posts = new ArrayList<>();
         posts.add(new OtherPost(
                 userName,
-                "1\uBC15 2\uC77C \uC0C1\uD558\uC774 \uC5EC\uD589\uAE30",
+                "1박 2일 상하이 여행기",
                 "2026. 05. 20",
                 12,
                 5,
-                "#\uAC10\uC131", "#\uC6B0\uC815 \uC5EC\uD589", "#1\uBC15 2\uC77C"
-        ));
-        posts.add(new OtherPost(
-                userName,
-                "\uAE09. \uC0C1\uD558\uC774 \uC5EC\uD589",
-                "2026. 05. 18",
-                8,
-                4,
-                "#\uC0C1\uD558\uC774", "#\uB9DB\uC9D1", "#2\uBC15 3\uC77C"
+                "#감성", "#우정 여행", "#1박 2일"
         ));
         return posts;
     }
@@ -149,15 +242,6 @@ public class OtherMyPageFragment extends Fragment {
                 chip.setClickable(false);
                 holder.tagGroup.addView(chip);
             }
-
-            holder.itemView.setOnClickListener(v -> {
-                androidx.appcompat.app.AppCompatActivity activity =
-                        (androidx.appcompat.app.AppCompatActivity) v.getContext();
-                activity.getSupportFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, new PostDetailFragment())
-                        .addToBackStack(null)
-                        .commit();
-            });
         }
 
         @Override
