@@ -32,7 +32,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.pinit.R;
 import com.example.pinit.activity.PlaceSearchActivity;
 import com.example.pinit.activity.PostTravelSettingActivity;
-import com.example.pinit.adapter.ScheduleDetailAdapter; // 🌟 기능팀 어댑터 추가됨!
+import com.example.pinit.adapter.ScheduleDetailAdapter; // 기능팀 어댑터 추가됨!
 import com.example.pinit.database.PlacesApiHelper;
 import com.example.pinit.model.DailySchedule;
 import com.example.pinit.model.MyPlan;
