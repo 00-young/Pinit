@@ -1,1 +1,0 @@
-# moblie_community
