@@ -88,11 +88,6 @@ public class CreatePostFragment extends Fragment {
     // 비동기 콜백 인터페이스
     interface GeocodeCallback { void onResult(LatLng latLng); }
 
-    private EditText etBudgetAccom;
-    private EditText etBudgetTransport;
-    private EditText etBudgetFood;
-    private EditText etBudgetEtc;
-
     // 게시글 제목
     private EditText etPostTitle;
 
@@ -566,14 +561,16 @@ public class CreatePostFragment extends Fragment {
     }
 
     private void bindHeaderMyPageButton(View rootView) {
-
         if (!(rootView instanceof LinearLayout)) return;
+    }
+
     private void addTravelSettingTag(String text) {
-        if (text == null || text.trim().isEmpty() || text.equals("날짜를 선택하세요")) return;
+        if (text == null
+                || text.trim().isEmpty()
+                || text.equals("날짜를 선택하세요")) return;
         TextView tvTag = new TextView(getContext());
         tvTag.setText(text);
         tvTag.setTextColor(0xFF333333);
-
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(0xFFFFFFFF);
         drawable.setStroke(2, 0xFFDDDDDD);
@@ -581,8 +578,12 @@ public class CreatePostFragment extends Fragment {
         tvTag.setBackground(drawable);
         tvTag.setPadding(32, 12, 32, 12);
 
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                );
+
         params.setMargins(0, 0, 16, 0);
         tvTag.setLayoutParams(params);
         layoutTravelSettingTagsContainer.addView(tvTag);
