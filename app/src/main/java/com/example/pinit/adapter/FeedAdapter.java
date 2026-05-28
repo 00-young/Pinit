@@ -17,6 +17,8 @@ import com.google.android.material.chip.ChipGroup;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections; // 정렬을 위해 추가
+import java.util.Comparator; // 정렬 기준 설정을 위해 추가
 import java.util.List;
 import java.util.Locale;
 
@@ -26,18 +28,25 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
     private final List<Post> visiblePosts = new ArrayList<>();
 
     public FeedAdapter() {
+        // 더미 데이터에 임의의 날짜와 스크랩 수를 추가했습니다.
         allPosts.add(new Post(
                 "털털한 복숭아",
                 "1박 2일 상하이 여행기",
+                "2026. 05. 21", // 날짜 추가
+                5, // 스크랩 수 추가
                 "#감성", "#우정 여행", "#1박 2일"
         ));
         allPosts.add(new Post(
                 "냉동된 블루베리",
                 "급.상하이 여행",
+                "2026. 05. 23", // 날짜 추가
+                12, // 스크랩 수 추가
                 "#혼자", "#맛집 탐방", "#2박 3일"
         ));
 
         visiblePosts.addAll(allPosts);
+        // 기본적으로 최신순으로 정렬되도록 초기화합니다.
+        sortPostsByLatest();
     }
 
     public void filterByQuery(String query) {
@@ -57,6 +66,31 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
         notifyDataSetChanged();
     }
 
+    // 1. 최신순 정렬 메서드
+    public void sortPostsByLatest() {
+        Collections.sort(visiblePosts, new Comparator<Post>() {
+            @Override
+            public int compare(Post p1, Post p2) {
+                // 날짜 문자열 비교 (내림차순)
+                return p2.date.compareTo(p1.date);
+            }
+        });
+        notifyDataSetChanged();
+    }
+
+    // 2. 스크랩순 정렬 메서드
+    public void sortPostsByScrap() {
+        Collections.sort(visiblePosts, new Comparator<Post>() {
+            @Override
+            public int compare(Post p1, Post p2) {
+                // 스크랩 수 비교 (내림차순)
+                return Integer.compare(p2.scrapCount, p1.scrapCount);
+            }
+        });
+        notifyDataSetChanged();
+    }
+
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -69,6 +103,14 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
         Post post = visiblePosts.get(position);
         holder.userName.setText(post.userName);
         holder.postTitle.setText(post.title);
+
+        // 🌟 Post 객체의 실제 데이터를 사용하도록 변경
+        holder.tvPostDate.setText(post.date);
+        holder.tvScrapCount.setText(String.valueOf(post.scrapCount));
+
+        // 댓글 수는 일단 고정값으로 둡니다. 나중에 백엔드와 연결 시 수정하세요.
+        holder.tvCommentCount.setText("12");
+
         holder.tagGroup.removeAllViews();
         View.OnClickListener profileClickListener = v -> openOtherProfile(v, post.userName);
         holder.profileImage.setOnClickListener(profileClickListener);
@@ -88,25 +130,14 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
         holder.itemView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // 어댑터 안에서 프래그먼트 전환을 하기 위해 현재 화면의 Activity 정보를 가져옵니다.
                 androidx.appcompat.app.AppCompatActivity activity = (androidx.appcompat.app.AppCompatActivity) v.getContext();
 
-                // MainActivity의 fragmentContainer 영역에 상세 화면 프래그먼트를 갈아 끼웁니다!
                 activity.getSupportFragmentManager().beginTransaction()
                         .replace(R.id.fragmentContainer, new com.example.pinit.fragment.PostDetailFragment())
-                        .addToBackStack(null) // 뒤로 가기 누르면 다시 피드 목록으로 컴백!
+                        .addToBackStack(null)
                         .commit();
             }
         });
-        // 임시 테스트 용도 더미 데이터
-        holder.tvCommentCount.setText("12");
-        holder.tvScrapCount.setText("5");
-        /*  나중에 백엔드랑 연결해서 진짜 데이터를 넣을 때는 이렇게 바꿉니다.
-        holder.tvCommentCount.setText(String.valueOf(post.getCommentCount()));
-        holder.tvScrapCount.setText(String.valueOf(post.getScrapCount()));
-        */
-        // 임시 날짜 데이터 세팅 (나중에 서버 연동 시 post.getDate() 등으로 교체)
-        holder.tvPostDate.setText("2026. 05. 21");
     }
 
     @Override
@@ -142,11 +173,8 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
         TextView userName;
         TextView postTitle;
         ChipGroup tagGroup;
-
-        // 🌟 1. 새로 추가한 텍스트뷰 변수 선언
         TextView tvCommentCount;
         TextView tvScrapCount;
-        // 🌟 날짜를 보여줄 텍스트뷰 변수 추가
         TextView tvPostDate;
 
         public ViewHolder(@NonNull View itemView) {
@@ -155,22 +183,25 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
             userName = itemView.findViewById(R.id.userName);
             postTitle = itemView.findViewById(R.id.postTitle);
             tagGroup = itemView.findViewById(R.id.postTagGroup);
-            // 🌟 2. XML의 아이디와 연결해주기
             tvCommentCount = itemView.findViewById(R.id.tvCommentCount);
             tvScrapCount = itemView.findViewById(R.id.tvScrapCount);
-            // 🌟 XML의 날짜 아이디와 연결
             tvPostDate = itemView.findViewById(R.id.tvPostDate);
         }
     }
 
+    // Post 클래스에 날짜와 스크랩 수 추가
     private static class Post {
         String userName;
         String title;
+        String date; // 추가
+        int scrapCount; // 추가
         List<String> tags;
 
-        Post(String userName, String title, String... tags) {
+        Post(String userName, String title, String date, int scrapCount, String... tags) {
             this.userName = userName;
             this.title = title;
+            this.date = date;
+            this.scrapCount = scrapCount;
             this.tags = Arrays.asList(tags);
         }
 
