@@ -86,9 +86,43 @@
                 android:textStyle="bold" />
 
             <com.google.android.material.chip.ChipGroup
+                android:id="@+id/cgTravelSettings"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp">
+                android:layout_marginTop="12dp">
+
+                <com.google.android.material.chip.Chip
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="2026.05.23 ~ 2026.05.24"
+                    app:chipBackgroundColor="#FFFFFF"
+                    app:chipStrokeColor="#DDDDDD"
+                    app:chipStrokeWidth="1dp"
+                    android:textColor="#333333" />
+
+                <com.google.android.material.chip.Chip
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="상하이"
+                    app:chipBackgroundColor="#FFFFFF"
+                    app:chipStrokeColor="#DDDDDD"
+                    app:chipStrokeWidth="1dp"
+                    android:textColor="#333333" />
+
+                <com.google.android.material.chip.Chip
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="2명"
+                    app:chipBackgroundColor="#FFFFFF"
+                    app:chipStrokeColor="#DDDDDD"
+                    app:chipStrokeWidth="1dp"
+                    android:textColor="#333333" />
+            </com.google.android.material.chip.ChipGroup>
+
+            <com.google.android.material.chip.ChipGroup
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp">
 
                 <com.google.android.material.chip.Chip
                     android:layout_width="wrap_content"
@@ -182,104 +216,30 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:columnCount="2"
-                    android:rowCount="2">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:layout_marginEnd="4dp"
-                        android:layout_marginBottom="8dp"
-                        android:background="#FFFFFF"
-                        android:orientation="vertical"
-                        android:padding="12dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="숙소"
-                            android:textSize="12sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="20만원"
-                            android:textColor="#000000"
-                            android:textSize="16sp"
-                            android:textStyle="bold" />
+                    android:rowCount="3">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_columnWeight="1" android:layout_marginEnd="4dp" android:layout_marginBottom="8dp" android:background="#FFFFFF" android:orientation="vertical" android:padding="12dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="식비" android:textSize="12sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="30만원" android:textColor="#000000" android:textSize="16sp" android:textStyle="bold" />
                     </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:layout_marginStart="4dp"
-                        android:layout_marginBottom="8dp"
-                        android:background="#FFFFFF"
-                        android:orientation="vertical"
-                        android:padding="12dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="교통"
-                            android:textSize="12sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="3만원"
-                            android:textColor="#000000"
-                            android:textSize="16sp"
-                            android:textStyle="bold" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_columnWeight="1" android:layout_marginStart="4dp" android:layout_marginBottom="8dp" android:background="#FFFFFF" android:orientation="vertical" android:padding="12dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="교통" android:textSize="12sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="3만원" android:textColor="#000000" android:textSize="16sp" android:textStyle="bold" />
                     </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:layout_marginEnd="4dp"
-                        android:background="#FFFFFF"
-                        android:orientation="vertical"
-                        android:padding="12dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="식비"
-                            android:textSize="12sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="30만원"
-                            android:textColor="#000000"
-                            android:textSize="16sp"
-                            android:textStyle="bold" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_columnWeight="1" android:layout_marginEnd="4dp" android:layout_marginBottom="8dp" android:background="#FFFFFF" android:orientation="vertical" android:padding="12dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="숙박" android:textSize="12sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="20만원" android:textColor="#000000" android:textSize="16sp" android:textStyle="bold" />
                     </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:layout_marginStart="4dp"
-                        android:background="#FFFFFF"
-                        android:orientation="vertical"
-                        android:padding="12dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="기타"
-                            android:textSize="12sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="40만원"
-                            android:textColor="#000000"
-                            android:textSize="16sp"
-                            android:textStyle="bold" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_columnWeight="1" android:layout_marginStart="4dp" android:layout_marginBottom="8dp" android:background="#FFFFFF" android:orientation="vertical" android:padding="12dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="쇼핑" android:textSize="12sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0만원" android:textColor="#000000" android:textSize="16sp" android:textStyle="bold" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_columnWeight="1" android:layout_marginEnd="4dp" android:background="#FFFFFF" android:orientation="vertical" android:padding="12dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="관광" android:textSize="12sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0만원" android:textColor="#000000" android:textSize="16sp" android:textStyle="bold" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_columnWeight="1" android:layout_marginStart="4dp" android:background="#FFFFFF" android:orientation="vertical" android:padding="12dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="기타" android:textSize="12sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="40만원" android:textColor="#000000" android:textSize="16sp" android:textStyle="bold" />
                     </LinearLayout>
                 </GridLayout>
             </LinearLayout>
@@ -328,11 +288,12 @@
                 android:layout_height="200dp"
                 android:layout_marginBottom="12dp" />
 
-            <LinearLayout
-                android:id="@+id/layoutPlacesList"
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvPlacesDay1"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical" />
+                android:nestedScrollingEnabled="false"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/btnShowMore"
@@ -341,7 +302,7 @@
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="16dp"
                 android:backgroundTint="#FFFFFF"
-                android:text="더보기"
+                android:text="더보기 ▼"
                 android:textColor="#000000" />
 
             <TextView
@@ -391,20 +352,12 @@
                 android:layout_height="200dp"
                 android:layout_marginBottom="12dp" />
 
-            <LinearLayout
-                android:id="@+id/layoutPlacesList2"
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvPlacesDay2"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                android:lineSpacingExtra="8dp"
-                android:text="① 예원 거리&#10;② 상하이 디즈니랜드&#10;③ 와이탄 야경"
-                android:textColor="#000000"
-                android:textSize="16sp" />
+                android:nestedScrollingEnabled="false"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/btnShowMore2"
@@ -413,7 +366,7 @@
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="16dp"
                 android:backgroundTint="#FFFFFF"
-                android:text="더보기"
+                android:text="더보기 ▼"
                 android:textColor="#000000" />
 
             <TextView
@@ -421,7 +374,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:lineSpacingExtra="4dp"
-                android:text="둘째 날은 디즈니랜드에서 하루를 보냈습니다. 밤에 본 예원과 와이탄 야경도 잊을 수 없는 추억이 되었어요."
+                android:text="둘째 날은 디즈니랜드에서 하루를 보냈습니다. 밤에 본 예원과 와이탄 야경도 잊을 수 없는 추억이 일었어요."
                 android:textColor="#333333"
                 android:textSize="14sp" />
 
