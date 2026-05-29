@@ -2,6 +2,7 @@ package com.example.pinit.service;
 
 
 import com.example.pinit.model.User;
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 public class UserService {
@@ -17,24 +18,23 @@ public class UserService {
         );
     }
 
-    public void getUserPreference(
+    public void getUser(
 
             UserCallback callback
     ) {
-        String uid = "testUser";
-   /*     String uid =
+        String email =
 
                 FirebaseAuth
                         .getInstance()
                         .getCurrentUser()
-                        .getUid();  */
+                        .getEmail();
 
         FirebaseFirestore db =
                 FirebaseFirestore
                         .getInstance();
 
         db.collection("users")
-                .document(uid)
+                .document(email)
 
                 .get()
 
@@ -69,5 +69,7 @@ public class UserService {
                             );
                         }
                 );
+
     }
+
 }

@@ -61,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
         UserService userService =
                 new UserService();
 
-        userService.getUserPreference(
+        userService.getUser(
 
                 new UserService.UserCallback() {
 
@@ -150,6 +150,7 @@ public class MainActivity extends AppCompatActivity {
                                 .getCurrentUser()
                                 .getUid()
                 )
+
                 .limit(1)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
