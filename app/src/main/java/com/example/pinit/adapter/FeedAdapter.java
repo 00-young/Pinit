@@ -136,7 +136,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
 
         Post post = visiblePosts.get(position);
 
-        holder.userName.setText(post.getOwnerNickname());
+        holder.userName.setText(post.getUserNickname());
 
         holder.postTitle.setText(post.getTitle());
 
@@ -164,7 +164,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
         View.OnClickListener profileClickListener = v ->
                 openOtherProfile(
                         v,
-                        post.getOwnerNickname()
+                        post.getUserNickname()
                 );
 
         holder.profileImage.setOnClickListener(
@@ -217,11 +217,16 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
                     (androidx.appcompat.app.AppCompatActivity)
                             v.getContext();
 
+            PostDetailFragment fragment =
+                    PostDetailFragment.newInstance(
+                            post.getPostId()
+                    );
+
             activity.getSupportFragmentManager()
                     .beginTransaction()
                     .replace(
                             R.id.fragmentContainer,
-                            new PostDetailFragment()
+                            fragment
                     )
                     .addToBackStack(null)
                     .commit();
