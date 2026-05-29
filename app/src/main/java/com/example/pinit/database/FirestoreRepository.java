@@ -30,7 +30,9 @@ public class FirestoreRepository {
             int travelerCount,
             double totalBudget,
             String startDate,
-            String endDate
+            String endDate,
+            double latitude,
+            double longitude
     ) {
 
         Map<String, Object> schedule = new HashMap<>();
@@ -39,6 +41,8 @@ public class FirestoreRepository {
         schedule.put("title", title);
         schedule.put("country", country);
         schedule.put("city", city);
+        schedule.put("latitude", latitude);
+        schedule.put("longitude", longitude);
         schedule.put("travelerCount", travelerCount);
         schedule.put("totalBudget", totalBudget);
         schedule.put("startDate", startDate);

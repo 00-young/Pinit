@@ -394,7 +394,9 @@ public class PlaceFragment extends Fragment {
                 1,
                 trip.getBudget(),
                 trip.getStartDate(),
-                trip.getEndDate()
+                trip.getEndDate(),
+                lat,
+                lng
         );
 
         // =========================
