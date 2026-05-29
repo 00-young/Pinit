@@ -2,6 +2,7 @@ package com.example.pinit.activity;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 
@@ -15,10 +16,17 @@ import com.example.pinit.fragment.FeedFragment;
 import com.example.pinit.fragment.HomeFragment;
 import com.example.pinit.fragment.MyPageFragment;
 import com.example.pinit.fragment.PlaceFragment;
+import com.example.pinit.model.RecommendedPlace;
+import com.example.pinit.model.UserPreference;
+import com.example.pinit.service.RecommendationManager;
+import com.example.pinit.service.UserService;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -50,6 +58,36 @@ public class MainActivity extends AppCompatActivity {
             loadFragment(fragmentForNavId(item.getItemId(), null, null));
             return true;
         });
+        UserService userService =
+                new UserService();
+
+        userService.getUserPreference(
+
+                new UserService.UserCallback() {
+
+                    @Override
+                    public void onSuccess(
+                            UserPreference user
+                    ) {
+
+                        startRecommendation(
+                                user
+                        );
+                    }
+
+                    @Override
+                    public void onFailure(
+                            String error
+                    ) {
+
+                        Log.e(
+                                "FINAL_RECOMMEND",
+                                error
+                        );
+                    }
+                }
+        );
+
     }
 
     private Fragment fragmentForNavId(int id, String postSearchQuery, ArrayList<String> travelSettings) {
@@ -71,6 +109,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return new HomeFragment();
     }
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -94,5 +133,103 @@ public class MainActivity extends AppCompatActivity {
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragmentContainer, fragment)
                 .commit();
+    }
+
+    private void startRecommendation(
+            UserPreference user
+    ) {
+        RecommendationManager
+                recommendationManager =
+                new RecommendationManager();
+
+        FirebaseFirestore.getInstance()
+                .collection("schedules")
+                .whereEqualTo(
+                        "userId",
+                        FirebaseAuth.getInstance()
+                                .getCurrentUser()
+                                .getUid()
+                )
+                .limit(1)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+
+                    if (querySnapshot.isEmpty()) {
+
+                        Log.e(
+                                "FINAL_RECOMMEND",
+                                "여행 일정 없음"
+                        );
+
+                        return;
+                    }
+
+                    DocumentSnapshot doc =
+                            querySnapshot.getDocuments().get(0);
+
+                    Double lat =
+                            doc.getDouble("latitude");
+
+                    Double lng =
+                            doc.getDouble("longitude");
+
+                    if (lat == null || lng == null) {
+
+                        Log.e(
+                                "FINAL_RECOMMEND",
+                                "좌표 없음"
+                        );
+
+                        return;
+                    }
+
+                    Log.d(
+                            "FINAL_RECOMMEND",
+                            "좌표 : " + lat + ", " + lng
+                    );
+
+                    recommendationManager
+                            .getRecommendations(
+
+                                    user,
+                                    lat,
+                                    lng,
+
+                                    new RecommendationManager
+                                            .RecommendationCallback() {
+
+                                        @Override
+                                        public void onSuccess(
+                                                List<RecommendedPlace>
+                                                        recommendedPlaces
+                                        ) {
+
+                                            for (
+                                                    RecommendedPlace place
+                                                    : recommendedPlaces
+                                            ) {
+
+                                                Log.d(
+                                                        "FINAL_RECOMMEND",
+                                                        place.getName()
+                                                                + " / 점수: "
+                                                                + place.getScore()
+                                                );
+                                            }
+                                        }
+
+                                        @Override
+                                        public void onFailure(
+                                                String error
+                                        ) {
+
+                                            Log.e(
+                                                    "FINAL_RECOMMEND",
+                                                    error
+                                            );
+                                        }
+                                    }
+                            );
+                });
     }
 }
