@@ -2,12 +2,13 @@ package com.example.pinit.model.post
 
 import com.google.firebase.Timestamp
 
-
 data class Post(
 
     val postId: String = "",
 
     val ownerUserId: String = "",
+
+    val ownerNickname: String = "",
 
     val title: String = "",
 
