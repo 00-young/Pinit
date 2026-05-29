@@ -1,6 +1,8 @@
 package com.example.pinit.fragment;
 
-import android.content.Intent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -8,6 +10,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -18,10 +21,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
 import com.example.pinit.adapter.ScheduleDetailAdapter;
-import com.example.pinit.data.MyScrap;
 import com.example.pinit.model.Schedule;
 import com.example.pinit.model.DailySchedule; // 추가됨
 import com.example.pinit.model.MyPlan; // 추가됨
+import com.example.pinit.model.post.Post;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -31,11 +34,43 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.Timestamp;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FieldValue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class PostDetailFragment extends Fragment {
+    private static final String ARG_POST_ID = "postId";
+    private FirebaseFirestore db;
+    private String postId;
+    private TextView tvPostTitle;
+    private TextView tvAuthorName;
+    private TextView tvPostDate;
+    private ImageView btnActionScrap;
+    private ImageView btnActionShare;
+
+    public static PostDetailFragment newInstance(
+            String postId
+    ) {
+
+        PostDetailFragment fragment =
+                new PostDetailFragment();
+
+        Bundle args = new Bundle();
+
+        args.putString(ARG_POST_ID, postId);
+
+        fragment.setArguments(args);
+
+        return fragment;
+    }
 
     private RecyclerView rvPlacesDay1;
     private RecyclerView rvPlacesDay2;
@@ -48,6 +83,17 @@ public class PostDetailFragment extends Fragment {
 
     @Nullable
     @Override
+    public void onCreate(Bundle savedInstanceState) {
+
+        super.onCreate(savedInstanceState);
+
+        if (getArguments() != null) {
+
+            postId = getArguments()
+                    .getString(ARG_POST_ID);
+        }
+    }
+
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.activity_post_detail, container, false);
 
@@ -56,6 +102,8 @@ public class PostDetailFragment extends Fragment {
         rvPlacesDay2 = view.findViewById(R.id.rvPlacesDay2);
         btnShowMore = view.findViewById(R.id.btnShowMore);
         btnShowMore2 = view.findViewById(R.id.btnShowMore2);
+        btnActionScrap = view.findViewById(R.id.btnActionScrap);
+        btnActionShare = view.findViewById(R.id.btnActionShare);
 
         // 상단 뒤로가기 및 프로필 버튼 이벤트
         view.findViewById(R.id.btnBack).setOnClickListener(v -> getParentFragmentManager().popBackStack());
@@ -74,7 +122,10 @@ public class PostDetailFragment extends Fragment {
 
         // [핵심] 서버에서 데이터를 불러오는(척하는) 더미 데이터 세팅 함수 호출
         // (버튼 클릭보다 먼저 데이터가 세팅되어 있어야 합니다)
-        fetchPostDetailDataFromServer();
+        db = FirebaseFirestore.getInstance();
+
+        loadPostDetail();
+        recordView();
 
         // [수정됨] 일정 담기 이벤트 리스너 분리 적용
         Button btnSaveAllSchedule = view.findViewById(R.id.btnSaveAllSchedule);
@@ -101,8 +152,201 @@ public class PostDetailFragment extends Fragment {
         // 더보기 버튼 토글 로직
         btnShowMore.setOnClickListener(v -> toggleRecyclerViewVisibility(rvPlacesDay1, btnShowMore));
         btnShowMore2.setOnClickListener(v -> toggleRecyclerViewVisibility(rvPlacesDay2, btnShowMore2));
+        btnActionScrap.setOnClickListener(v -> {toggleScrap();});
+        btnActionShare.setOnClickListener(v -> {sharePostByLink();});
+
+        tvPostTitle = view.findViewById(R.id.tvPostTitle);
+
+        tvAuthorName = view.findViewById(R.id.tvAuthorName);
+
+        tvPostDate = view.findViewById(R.id.tvPostDate);
 
         return view;
+    }
+
+    private void sharePostByLink() {
+
+        if (FirebaseAuth.getInstance()
+                .getCurrentUser() == null) {
+            return;
+        }
+
+        String uid = FirebaseAuth
+                .getInstance()
+                .getCurrentUser()
+                .getUid();
+
+        String shareId =
+                UUID.randomUUID().toString();
+
+        Map<String, Object> shareData =
+                new HashMap<>();
+
+        shareData.put("userId", uid);
+
+        shareData.put(
+                "shareType",
+                "copy_link"
+        );
+
+        shareData.put(
+                "createdAt",
+                Timestamp.now()
+        );
+
+        db.collection("posts")
+                .document(postId)
+                .collection("shares")
+                .document(shareId)
+                .set(shareData);
+
+        // 실제 링크 복사
+        ClipboardManager clipboard =
+                (ClipboardManager)
+                        requireContext()
+                                .getSystemService(
+                                        Context.CLIPBOARD_SERVICE
+                                );
+
+        ClipData clip =
+                ClipData.newPlainText(
+                        "postLink",
+                        "https://pinit.com/post/"
+                                + postId
+                );
+
+        clipboard.setPrimaryClip(clip);
+
+        Toast.makeText(
+                getContext(),
+                "링크 복사 완료",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
+
+    private void toggleScrap() {
+
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            return;
+        }
+
+        String uid = FirebaseAuth
+                .getInstance()
+                .getCurrentUser()
+                .getUid();
+
+        DocumentReference scrapRef = db.collection("posts")
+                        .document(postId)
+                        .collection("scrap")
+                        .document(uid);
+
+        scrapRef.get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        // 스크랩 취소
+                        scrapRef.delete().addOnSuccessListener(unused -> {
+                                    db.collection("posts").document(postId)
+                                            .update(
+                                                    "scrapCount",
+                                                    FieldValue.increment(-1)
+                                            );
+                                    Toast.makeText(
+                                            getContext(),
+                                            "스크랩 취소",
+                                            Toast.LENGTH_SHORT
+                                    ).show();
+                                });
+
+                    } else {
+                        Map<String, Object> scrapData = new HashMap<>();
+                        scrapData.put("createdAt", Timestamp.now());
+                        scrapData.put("userId", uid);
+                        scrapRef.set(scrapData).addOnSuccessListener(unused -> {
+                                    db.collection("posts")
+                                            .document(postId)
+                                            .update(
+                                                    "scrapCount",
+                                                    FieldValue.increment(1)
+                                            );
+                                    Toast.makeText(
+                                            getContext(),
+                                            "스크랩 완료",
+                                            Toast.LENGTH_SHORT
+                                    ).show();
+                                });
+                    }
+                });
+    }
+
+    private void loadPostDetail() {
+
+        db.collection("posts")
+                .document(postId)
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+
+                    if (!documentSnapshot.exists()) {
+                        return;
+                    }
+
+                    Post post =
+                            documentSnapshot.toObject(Post.class);
+
+                    if (post == null) {
+                        return;
+                    }
+
+                    bindPostData(post);
+                });
+    }
+
+    private void recordView() {
+
+        if(FirebaseAuth.getInstance().getCurrentUser() == null){
+            return;
+        }
+
+        String uid = FirebaseAuth
+                .getInstance()
+                .getCurrentUser()
+                .getUid();
+
+        String viewId = UUID.randomUUID().toString();
+
+        Map<String, Object> viewData =
+                new HashMap<>();
+
+        viewData.put("userId", uid);
+
+        viewData.put("device", "android");
+
+        viewData.put(
+                "viewedAt",
+                Timestamp.now()
+        );
+
+        db.collection("posts")
+                .document(postId)
+                .collection("views")
+                .document(viewId)
+                .set(viewData);
+    }
+
+    private void bindPostData(Post post) {
+
+        tvPostTitle.setText(post.getTitle());
+        tvAuthorName.setText(post.getUserNickname());
+
+        if (post.getCreatedAt() != null) {
+            String formattedDate =
+                    new java.text.SimpleDateFormat(
+                            "yyyy. MM. dd",
+                            java.util.Locale.KOREA
+                    ).format(
+                            post.getCreatedAt().toDate()
+                    );
+            tvPostDate.setText(formattedDate);
+        }
     }
 
     // ==========================================
@@ -167,31 +411,16 @@ public class PostDetailFragment extends Fragment {
     }
     // ==========================================
 
-
     private void setupBottomActions(View view) {
-        ImageView btnActionShare = view.findViewById(R.id.btnActionShare);
-        ImageView btnActionComment = view.findViewById(R.id.btnActionComment);
-        ImageView btnActionScrap = view.findViewById(R.id.btnActionScrap);
 
-        btnActionShare.setOnClickListener(v -> {
-            Intent shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.setType("text/plain");
-            shareIntent.putExtra(Intent.EXTRA_TEXT, "[Pin It] 1박 2일 상하이 여행기\n아래 링크에서 확인해보세요!");
-            startActivity(Intent.createChooser(shareIntent, "게시물 공유하기"));
-        });
+        ImageView btnActionComment = view.findViewById(R.id.btnActionComment);
 
         btnActionComment.setOnClickListener(v -> {
-            CommentBottomSheetFragment commentSheet = new CommentBottomSheetFragment();
-            commentSheet.show(getChildFragmentManager(), "CommentBottomSheet");
-        });
-
-        final boolean[] isScraped = { MyScrap.isScraped(requireContext(), MyScrap.POST_ID_SHANGHAI) };
-        btnActionScrap.setColorFilter(isScraped[0] ? 0xFFFFD54F : 0xFF888888);
-        btnActionScrap.setOnClickListener(v -> {
-            isScraped[0] = !isScraped[0];
-            MyScrap.setScraped(requireContext(), MyScrap.POST_ID_SHANGHAI, isScraped[0]);
-            btnActionScrap.setColorFilter(isScraped[0] ? 0xFFFFD54F : 0xFF888888);
-            Toast.makeText(getContext(), isScraped[0] ? "스크랩 완료!" : "스크랩이 취소되었습니다.", Toast.LENGTH_SHORT).show();
+            CommentBottomSheetFragment commentSheet = CommentBottomSheetFragment.newInstance(postId);
+            commentSheet.show(
+                    getChildFragmentManager(),
+                    "CommentBottomSheet"
+            );
         });
     }
 
@@ -219,31 +448,6 @@ public class PostDetailFragment extends Fragment {
                 return false;
             });
         }
-    }
-
-    // 서버 데이터를 받아오는 더미 환경 구성
-    private void fetchPostDetailDataFromServer() {
-        // [수정됨] 기존 리스트를 클리어하고 멤버 변수에 담기
-        day1Schedules.clear();
-        String[] day1Names = {"상하이 푸동 국제 공항", "Shanghai Royal Garden Hotel", "Haidilao (Gaoke East Rd Branch)", "난징동루 보행자 거리", "와이탄 야경"};
-        for (String name : day1Names) {
-            Schedule obj = new Schedule();
-            obj.setPlaceName(name); // TODO: 모델 클래스의 Setter 확인 (예: setName)
-            day1Schedules.add(obj);
-        }
-
-        // [수정됨] 기존 리스트를 클리어하고 멤버 변수에 담기
-        day2Schedules.clear();
-        String[] day2Names = {"신천지 거리", "상하이 디즈니랜드", "예원 야경"};
-        for (String name : day2Names) {
-            Schedule obj = new Schedule();
-            obj.setPlaceName(name); // TODO: 모델 클래스의 Setter 확인
-            day2Schedules.add(obj);
-        }
-
-        // 리사이클러뷰에 데이터 렌더링
-        renderRecyclerView(rvPlacesDay1, day1Schedules);
-        renderRecyclerView(rvPlacesDay2, day2Schedules);
     }
 
     // 리사이클러뷰 어댑터 연결 공통 함수

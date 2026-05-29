@@ -386,8 +386,6 @@ public class CreatePostFragment extends Fragment {
         etBudgetAccom = view.findViewById(R.id.etBudgetAccom);
         etBudgetTransport = view.findViewById(R.id.etBudgetTransport);
         etBudgetFood = view.findViewById(R.id.etBudgetFood);
-        etBudgetTransport = view.findViewById(R.id.etBudgetTransport);
-        etBudgetAccom = view.findViewById(R.id.etBudgetAccom);
         etBudgetShopping = view.findViewById(R.id.etBudgetShopping);
         etBudgetSightseeing = view.findViewById(R.id.etBudgetSightseeing);
         etBudgetEtc = view.findViewById(R.id.etBudgetEtc);
@@ -504,6 +502,7 @@ public class CreatePostFragment extends Fragment {
         Post post = new Post(
                 postId,
                 uid,
+                "test",
                 title,
                 "image",
                 "",
@@ -543,6 +542,10 @@ public class CreatePostFragment extends Fragment {
                             "업로드 성공",
                             Toast.LENGTH_SHORT
                     ).show();
+
+                    requireActivity()
+                            .getSupportFragmentManager()
+                            .popBackStack();
 
                     return null;
                 },

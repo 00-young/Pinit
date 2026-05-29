@@ -78,6 +78,7 @@
                 app:tint="#000000" />
 
             <TextView
+                android:id="@+id/tvPostTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="1박 2일 상하이 여행기"
@@ -171,6 +172,7 @@
                         android:background="#000000" />
 
                     <TextView
+                        android:id="@+id/tvAuthorName"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="털털한 복숭아"
@@ -180,6 +182,7 @@
                 </LinearLayout>
 
                 <TextView
+                    android:id="@+id/tvPostDate"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_alignParentEnd="true"
