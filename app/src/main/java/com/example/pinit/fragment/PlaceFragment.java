@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.location.Geocoder;
+import android.location.Address;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -21,6 +23,9 @@ import android.widget.Toast;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -44,6 +49,7 @@ import com.google.firebase.auth.FirebaseUser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 // [프래그먼트] BottomNavigation 장소 탭 (2번째 탭)
@@ -271,6 +277,7 @@ public class PlaceFragment extends Fragment {
         double lng = 0;
 
         try {
+
             lat = Double.parseDouble(
                     place.getOrDefault("lat", "0")
             );
@@ -280,6 +287,50 @@ public class PlaceFragment extends Fragment {
             );
 
         } catch (Exception ignored) {}
+
+        Geocoder geocoder =
+                new Geocoder(requireContext(), Locale.KOREA);
+
+        String country = "";
+        String city = "";
+
+        try {
+
+            List<Address> addresses =
+                    geocoder.getFromLocation(lat, lng, 1);
+
+            if (addresses != null &&
+                    !addresses.isEmpty()) {
+
+                Address addr = addresses.get(0);
+
+                country = addr.getCountryName();
+
+                city = addr.getLocality();
+
+                if (city == null || city.isEmpty()) {
+                    city = addr.getAdminArea();
+                }
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // country fallback
+        if (country == null || country.isEmpty()) {
+
+            String address =
+                    place.getOrDefault("address", "");
+
+            String[] parts = address.split(" ");
+
+            if (parts.length > 0) {
+
+                country = parts[parts.length - 1];
+            }
+        }
+
         schedule.setLatitude(lat);
         schedule.setLongitude(lng);
         // ===== placeId / category =====
@@ -298,27 +349,20 @@ public class PlaceFragment extends Fragment {
         FirestoreRepository repository =
                 new FirestoreRepository();
 
+        FirebaseUser user =
+                FirebaseAuth.getInstance().getCurrentUser();
+
+        if (user == null) return;
+
+        String userId = user.getUid();
+
         String scheduleId =
-                String.valueOf(trip.getId());
+                userId + "_" + trip.getId();
 
         String dayId = schedule.getDate();
 
         String itemId =
                 "item" + insertedId;
-
-        // =========================
-        // Firebase uid 연결
-        // =========================
-
-        FirebaseUser user =
-                FirebaseAuth.getInstance()
-                        .getCurrentUser();
-
-        String userId = "";
-
-        if (user != null) {
-            userId = user.getUid();
-        }
 
         // =========================
         // 여행 전체(schedule) 업로드
@@ -328,7 +372,7 @@ public class PlaceFragment extends Fragment {
                 scheduleId,
                 userId,
                 trip.getTitle(),
-                "한국",
+                country,
                 trip.getDestination(),
                 1,
                 trip.getBudget(),
