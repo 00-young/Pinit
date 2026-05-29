@@ -24,6 +24,7 @@ import com.example.pinit.model.Schedule;
 import com.example.pinit.model.DailySchedule; // 추가됨
 import com.example.pinit.model.MyPlan; // 추가됨
 import com.example.pinit.model.post.Post;
+import com.example.pinit.model.post.Comment;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -34,9 +35,14 @@ import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.Timestamp;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class PostDetailFragment extends Fragment {
     private static final String ARG_POST_ID = "postId";
@@ -113,6 +119,7 @@ public class PostDetailFragment extends Fragment {
         db = FirebaseFirestore.getInstance();
 
         loadPostDetail();
+        recordView();
 
         // [수정됨] 일정 담기 이벤트 리스너 분리 적용
         Button btnSaveAllSchedule = view.findViewById(R.id.btnSaveAllSchedule);
@@ -171,6 +178,38 @@ public class PostDetailFragment extends Fragment {
                 });
     }
 
+    private void recordView() {
+
+        if(FirebaseAuth.getInstance().getCurrentUser() == null){
+            return;
+        }
+
+        String uid = FirebaseAuth
+                .getInstance()
+                .getCurrentUser()
+                .getUid();
+
+        String viewId = UUID.randomUUID().toString();
+
+        Map<String, Object> viewData =
+                new HashMap<>();
+
+        viewData.put("userId", uid);
+
+        viewData.put("device", "android");
+
+        viewData.put(
+                "viewedAt",
+                Timestamp.now()
+        );
+
+        db.collection("posts")
+                .document(postId)
+                .collection("views")
+                .document(viewId)
+                .set(viewData);
+    }
+
     private void bindPostData(Post post) {
 
         tvPostTitle.setText(post.getTitle());
@@ -186,6 +225,37 @@ public class PostDetailFragment extends Fragment {
                     );
             tvPostDate.setText(formattedDate);
         }
+    }
+
+    private void uploadComment(String content) {
+
+        if(FirebaseAuth.getInstance().getCurrentUser() == null){
+            return;
+        }
+
+        String uid = FirebaseAuth
+                .getInstance()
+                .getCurrentUser()
+                .getUid();
+
+        String commentId =
+                UUID.randomUUID().toString();
+
+        Comment comment = new Comment(
+                commentId,
+                uid,
+                "",
+                "",
+                null,
+                content,
+                Timestamp.now()
+        );
+
+        db.collection("posts")
+                .document(postId)
+                .collection("comments")
+                .document(commentId)
+                .set(comment);
     }
 
     // ==========================================
@@ -264,7 +334,7 @@ public class PostDetailFragment extends Fragment {
         });
 
         btnActionComment.setOnClickListener(v -> {
-            CommentBottomSheetFragment commentSheet = new CommentBottomSheetFragment();
+            CommentBottomSheetFragment commentSheet = CommentBottomSheetFragment.newInstance(postId);
             commentSheet.show(getChildFragmentManager(), "CommentBottomSheet");
         });
 
