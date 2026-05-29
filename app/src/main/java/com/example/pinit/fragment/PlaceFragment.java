@@ -373,11 +373,13 @@ public class PlaceFragment extends Fragment {
                 userId,
                 trip.getTitle(),
                 country,
-                trip.getDestination(),
+                city,
                 1,
                 trip.getBudget(),
                 trip.getStartDate(),
-                trip.getEndDate()
+                trip.getEndDate(),
+                lat,
+                lng
         );
 
         // =========================
