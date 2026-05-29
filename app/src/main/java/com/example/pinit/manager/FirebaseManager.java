@@ -85,6 +85,13 @@ public class FirebaseManager {
             userMap.put("scrapCount", user.getScrapCount());
             userMap.put("isPrivate", user.isPrivate());
             userMap.put("fcmToken", fcmToken); // 💡 여기에 토큰 주입 (실패 시 "")
+
+            userMap.put("budgetType", user.getBudgetType());
+            userMap.put("ageGroup", user.getAgeGroup());
+            userMap.put("companion", user.getCompanion());
+            userMap.put("theme", user.getTheme());
+
+
             userMap.put("createdAt", FieldValue.serverTimestamp());
             userMap.put("updatedAt", FieldValue.serverTimestamp());
 
