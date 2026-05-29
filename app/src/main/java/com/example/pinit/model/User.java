@@ -13,6 +13,14 @@ public class User {
     private int postCount;
     private int scrapCount;
     private boolean isPrivate;
+
+    private String ageGroup;
+
+    private String companion;
+
+    private String theme;
+
+    private String budgetType;
     
     @ServerTimestamp
     private Date createdAt;
@@ -26,7 +34,8 @@ public class User {
     // Full constructor
     public User(String email, String nickname, String profileImageUrl, String bio, 
                 int followerCount, int followingCount, int postCount, int scrapCount, 
-                boolean isPrivate, Date createdAt, Date updatedAt) {
+                boolean isPrivate, Date createdAt, Date updatedAt, String ageGroup,
+                String companion, String theme, String budgetType) {
         this.email = email;
         this.nickname = nickname;
         this.profileImageUrl = profileImageUrl;
@@ -38,6 +47,10 @@ public class User {
         this.isPrivate = isPrivate;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.ageGroup = ageGroup;
+        this.companion = companion;
+        this.theme = theme;
+        this.budgetType = budgetType;
     }
 
     // Getters and Setters
@@ -67,6 +80,22 @@ public class User {
 
     public boolean isPrivate() { return isPrivate; }
     public void setPrivate(boolean aPrivate) { isPrivate = aPrivate; }
+
+    public String getAgeGroup() {
+        return ageGroup;
+    }
+
+    public String getCompanion() {
+        return companion;
+    }
+
+    public String getTheme() {
+        return theme;
+    }
+
+    public String getBudgetType() {
+        return budgetType;
+    }
 
     public Date getCreatedAt() { return createdAt; }
     public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
