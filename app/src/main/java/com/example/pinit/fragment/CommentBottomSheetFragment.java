@@ -22,6 +22,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.Timestamp;
+import com.google.firebase.firestore.FieldValue;
 
 import java.util.UUID;
 
@@ -131,6 +132,13 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment {
                             "댓글 등록 완료",
                             Toast.LENGTH_SHORT
                     ).show();
+
+                    db.collection("posts")
+                            .document(postId)
+                            .update(
+                                    "commentCount",
+                                    FieldValue.increment(1)
+                            );
                 });
     }
     private void loadComments() {
