@@ -74,6 +74,10 @@ public class RecommendationService {
 
         double budgetPoint = 0;
 
+        double companionPoint = 0;
+
+        double agePoint = 0;
+
         double score = 0;
 
         String types =
@@ -184,6 +188,167 @@ public class RecommendationService {
             ratingPoint += rating;
         }
 
+        //동행자 점수
+        String companion = user.getCompanion();
+
+        if ("연인".equals(companion)) {
+
+            if (types.contains("cafe")) {
+
+                score += 2;
+                companionPoint += 2;
+            }
+
+            if (types.contains("tourist_attraction")) {
+
+                score += 2;
+                companionPoint += 2;
+            }
+        }
+
+        else if ("친구".equals(companion)) {
+
+            if (types.contains("amusement_park")) {
+
+                score += 2;
+                companionPoint += 2;
+            }
+
+            if (types.contains("stadium")) {
+
+                score += 2;
+                companionPoint += 2;
+            }
+        }
+
+        else if ("가족".equals(companion)) {
+
+            if (types.contains("park")
+                    || types.contains("zoo")
+                    || types.contains("aquarium")) {
+
+                score += 2;
+                companionPoint += 2;
+            }
+        }
+
+        else if ("혼자".equals(companion)) {
+
+            if (types.contains("museum")
+                    || types.contains("art_gallery")) {
+
+                score += 2;
+                companionPoint += 2;
+            }
+
+
+        }
+
+        else if ("단체".equals(companion)) {
+
+            if (types.contains("amusement_park")) {
+
+                score += 2;
+                companionPoint += 2;
+            }
+
+            if (types.contains("park")) {
+
+                score += 2;
+                companionPoint += 2;
+            }
+
+            if (types.contains("stadium")) {
+
+                score += 2;
+                companionPoint += 2;
+            }
+
+            if (types.contains("tourist_attraction")) {
+
+                score += 1;
+                companionPoint += 1;
+            }
+        }
+
+        //연령대 점수
+        String ageGroup = user.getAgeGroup();
+
+        if ("10대".equals(ageGroup)) {
+
+            if (types.contains("amusement_park")) {
+
+                score += 2;
+                agePoint += 2;
+            }
+
+            if (types.contains("shopping_mall")) {
+
+                score += 2;
+                agePoint += 2;
+            }
+        }
+
+        else if ("20대".equals(ageGroup)) {
+
+            if (types.contains("cafe")) {
+
+                score += 2;
+                agePoint += 2;
+            }
+
+            if (types.contains("tourist_attraction")) {
+
+                score += 2;
+                agePoint += 2;
+            }
+        }
+
+        else if ("30대".equals(ageGroup)) {
+
+            if (types.contains("restaurant")) {
+
+                score += 2;
+                agePoint += 2;
+            }
+
+            if (types.contains("tourist_attraction")) {
+
+                score += 1;
+                agePoint += 1;
+            }
+        }
+
+        else if ("40대".equals(ageGroup)) {
+
+            if (types.contains("park")) {
+
+                score += 2;
+                agePoint += 2;
+            }
+
+            if (types.contains("museum")) {
+
+                score += 2;
+                agePoint += 2;
+            }
+        }
+
+        else if ("50대 이상".equals(ageGroup)) {
+
+            if (types.contains("museum")) {
+
+                score += 2;
+                agePoint += 2;
+            }
+
+            if (types.contains("park")) {
+
+                score += 2;
+                agePoint += 2;
+            }
+        }
+
         // 예산 점수
 
         String budget =
@@ -261,6 +426,12 @@ public class RecommendationService {
 
                         + " / 예산점수: "
                         + budgetPoint
+
+                        + " / 동행자점수: "
+                        + companionPoint
+
+                        + " / 연령대점수: "
+                        + agePoint
 
                         + " / 총점: "
                         + score
