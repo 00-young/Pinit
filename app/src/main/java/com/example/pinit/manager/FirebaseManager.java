@@ -85,6 +85,12 @@ public class FirebaseManager {
             userMap.put("scrapCount", user.getScrapCount());
             userMap.put("isPrivate", user.isPrivate());
             userMap.put("fcmToken", fcmToken); // 💡 여기에 토큰 주입 (실패 시 "")
+
+            userMap.put("budget_type", user.getBudget_type());
+            userMap.put("age_group", user.getAge_group());
+            userMap.put("companion", user.getCompanion());
+            userMap.put("theme", user.getTheme());
+
             userMap.put("createdAt", FieldValue.serverTimestamp());
             userMap.put("updatedAt", FieldValue.serverTimestamp());
 
@@ -178,6 +184,32 @@ public class FirebaseManager {
                 })
                 .addOnFailureListener(e -> {
                     if (listener != null) listener.onResult(false);
+                });
+    }
+    /**
+     * 사용자의 여행 성향 및 필터를 수정합니다.
+     */
+    public void updateUserSurvey(String email, String budgetType, String ageGroup, String companion, String theme, OnActionListener listener) {
+        if (email == null) return;
+
+        // 업데이트할 필드들만 Map으로 구성
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("budget_type", budgetType);
+        updates.put("age_group", ageGroup);
+        updates.put("companion", companion);
+        updates.put("theme", theme);
+        updates.put("updatedAt", FieldValue.serverTimestamp()); // 수정 시간 갱신
+
+        // .update() 메서드로 해당 필드만 덮어쓰기
+        db.collection("users").document(email)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d("FirebaseManager", "성향 정보 업데이트 성공");
+                    if (listener != null) listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("FirebaseManager", "성향 정보 업데이트 실패", e);
+                    if (listener != null) listener.onFailure(e);
                 });
     }
 }
