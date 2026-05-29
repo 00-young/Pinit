@@ -17,7 +17,7 @@ import com.example.pinit.fragment.HomeFragment;
 import com.example.pinit.fragment.MyPageFragment;
 import com.example.pinit.fragment.PlaceFragment;
 import com.example.pinit.model.RecommendedPlace;
-import com.example.pinit.model.UserPreference;
+import com.example.pinit.model.User;
 import com.example.pinit.service.RecommendationManager;
 import com.example.pinit.service.UserService;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -67,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
 
                     @Override
                     public void onSuccess(
-                            UserPreference user
+                            User user
                     ) {
 
                         startRecommendation(
@@ -136,7 +136,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startRecommendation(
-            UserPreference user
+            User user
     ) {
         RecommendationManager
                 recommendationManager =
