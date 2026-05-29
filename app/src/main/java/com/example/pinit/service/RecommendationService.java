@@ -2,7 +2,7 @@ package com.example.pinit.service;
 
 import android.util.Log;
 
-import com.example.pinit.model.UserPreference;
+import com.example.pinit.model.User;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,7 +11,7 @@ import java.util.Map;
 public class RecommendationService {
 
     public List<String> getRecommendedCategories(
-            UserPreference user
+            User user
     ) {
 
         List<String> categories =
@@ -64,7 +64,7 @@ public class RecommendationService {
     }
 
     public double calculateScore(
-            UserPreference user,
+            User user,
             Map<String, String> place
     ) {
 

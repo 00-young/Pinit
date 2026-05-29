@@ -1,7 +1,7 @@
 package com.example.pinit.service;
 
 
-import com.example.pinit.model.UserPreference;
+import com.example.pinit.model.User;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 public class UserService {
@@ -9,7 +9,7 @@ public class UserService {
     public interface UserCallback {
 
         void onSuccess(
-                UserPreference user
+                User user
         );
 
         void onFailure(
@@ -46,11 +46,11 @@ public class UserService {
                                     documentSnapshot.exists()
                             ) {
 
-                                UserPreference user =
+                                User user =
 
                                         documentSnapshot
                                                 .toObject(
-                                                        UserPreference.class
+                                                        User.class
                                                 );
 
                                 callback.onSuccess(

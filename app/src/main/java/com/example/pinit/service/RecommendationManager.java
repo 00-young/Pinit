@@ -3,9 +3,8 @@ package com.example.pinit.service;
 import android.util.Log;
 
 import com.example.pinit.database.PlacesApiHelper;
-import com.example.pinit.service.CongestionData;
 import com.example.pinit.model.RecommendedPlace;
-import com.example.pinit.model.UserPreference;
+import com.example.pinit.model.User;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,7 +36,7 @@ public class RecommendationManager {
 
     public void getRecommendations(
 
-            UserPreference user,
+            User user,
             double lat,
             double lng,
             RecommendationCallback callback
@@ -141,7 +140,7 @@ public class RecommendationManager {
 
     private void processPlace(
 
-            UserPreference user,
+            User user,
 
             Map<String, String> place,
 
