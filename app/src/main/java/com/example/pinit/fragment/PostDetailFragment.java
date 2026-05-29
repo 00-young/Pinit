@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -22,6 +23,7 @@ import com.example.pinit.data.MyScrap;
 import com.example.pinit.model.Schedule;
 import com.example.pinit.model.DailySchedule; // 추가됨
 import com.example.pinit.model.MyPlan; // 추가됨
+import com.example.pinit.model.post.Post;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -31,11 +33,34 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class PostDetailFragment extends Fragment {
+    private static final String ARG_POST_ID = "postId";
+    private FirebaseFirestore db;
+    private String postId;
+    private TextView tvPostTitle;
+    private TextView tvAuthorName;
+    private TextView tvPostDate;
+
+    public static PostDetailFragment newInstance(
+            String postId
+    ) {
+
+        PostDetailFragment fragment =
+                new PostDetailFragment();
+
+        Bundle args = new Bundle();
+
+        args.putString(ARG_POST_ID, postId);
+
+        fragment.setArguments(args);
+
+        return fragment;
+    }
 
     private RecyclerView rvPlacesDay1;
     private RecyclerView rvPlacesDay2;
@@ -48,6 +73,17 @@ public class PostDetailFragment extends Fragment {
 
     @Nullable
     @Override
+    public void onCreate(Bundle savedInstanceState) {
+
+        super.onCreate(savedInstanceState);
+
+        if (getArguments() != null) {
+
+            postId = getArguments()
+                    .getString(ARG_POST_ID);
+        }
+    }
+
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.activity_post_detail, container, false);
 
@@ -74,7 +110,9 @@ public class PostDetailFragment extends Fragment {
 
         // [핵심] 서버에서 데이터를 불러오는(척하는) 더미 데이터 세팅 함수 호출
         // (버튼 클릭보다 먼저 데이터가 세팅되어 있어야 합니다)
-        fetchPostDetailDataFromServer();
+        db = FirebaseFirestore.getInstance();
+
+        loadPostDetail();
 
         // [수정됨] 일정 담기 이벤트 리스너 분리 적용
         Button btnSaveAllSchedule = view.findViewById(R.id.btnSaveAllSchedule);
@@ -102,7 +140,52 @@ public class PostDetailFragment extends Fragment {
         btnShowMore.setOnClickListener(v -> toggleRecyclerViewVisibility(rvPlacesDay1, btnShowMore));
         btnShowMore2.setOnClickListener(v -> toggleRecyclerViewVisibility(rvPlacesDay2, btnShowMore2));
 
+        tvPostTitle = view.findViewById(R.id.tvPostTitle);
+
+        tvAuthorName = view.findViewById(R.id.tvAuthorName);
+
+        tvPostDate = view.findViewById(R.id.tvPostDate);
+
         return view;
+    }
+
+    private void loadPostDetail() {
+
+        db.collection("posts")
+                .document(postId)
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+
+                    if (!documentSnapshot.exists()) {
+                        return;
+                    }
+
+                    Post post =
+                            documentSnapshot.toObject(Post.class);
+
+                    if (post == null) {
+                        return;
+                    }
+
+                    bindPostData(post);
+                });
+    }
+
+    private void bindPostData(Post post) {
+
+        tvPostTitle.setText(post.getTitle());
+        tvAuthorName.setText(post.getUserNickname());
+
+        if (post.getCreatedAt() != null) {
+            String formattedDate =
+                    new java.text.SimpleDateFormat(
+                            "yyyy. MM. dd",
+                            java.util.Locale.KOREA
+                    ).format(
+                            post.getCreatedAt().toDate()
+                    );
+            tvPostDate.setText(formattedDate);
+        }
     }
 
     // ==========================================
