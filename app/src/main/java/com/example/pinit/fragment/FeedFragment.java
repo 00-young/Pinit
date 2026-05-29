@@ -23,6 +23,9 @@ import com.example.pinit.activity.PostSearchActivity;
 import com.example.pinit.adapter.FeedAdapter;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.example.pinit.model.post.Post;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -30,6 +33,8 @@ import java.util.List;
 import java.util.Set;
 
 public class FeedFragment extends Fragment {
+
+    private final List<Post> postList = new ArrayList<>();
 
     private RecyclerView recyclerView;
     private FeedAdapter adapter;
@@ -61,7 +66,7 @@ public class FeedFragment extends Fragment {
         recyclerView = view.findViewById(R.id.feedRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        adapter = new FeedAdapter();
+        adapter = new FeedAdapter(new ArrayList<>());
         recyclerView.setAdapter(adapter);
 
         String query = "";
@@ -119,6 +124,7 @@ public class FeedFragment extends Fragment {
                 .addToBackStack(null)
                 .commit());
 
+        loadPosts();
         return view;
     }
 
@@ -229,5 +235,27 @@ public class FeedFragment extends Fragment {
         intent.putExtra(PostSearchActivity.EXTRA_SEARCH_QUERY, buildEditableSearchQuery());
         intent.putStringArrayListExtra(PostSearchActivity.EXTRA_TRAVEL_SETTINGS, new ArrayList<>(travelSettingTags));
         startActivity(intent);
+    }
+    private void loadPosts() {
+
+        FirebaseFirestore.getInstance()
+                .collection("posts")
+                .orderBy(
+                        "createdAt",
+                        Query.Direction.DESCENDING
+                )
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+
+                    postList.clear();
+
+                    postList.addAll(
+                            queryDocumentSnapshots.toObjects(Post.class)
+                    );
+
+                    adapter.updatePosts(postList);
+
+                    adapter.sortPostsByLatest();
+                });
     }
 }

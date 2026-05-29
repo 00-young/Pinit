@@ -1,7 +1,6 @@
 package com.example.pinit.fragment;
+import com.example.pinit.model.post.Comment;
 
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,95 +10,311 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.graphics.Typeface;
+import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.example.pinit.R;
-import com.example.pinit.data.MyComment;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.Timestamp;
+import com.google.firebase.firestore.FieldValue;
 
-import java.util.List;
+import java.util.UUID;
 
 public class CommentBottomSheetFragment extends BottomSheetDialogFragment {
 
-    private static final String PREFS_NAME = "UserPrefs";
-    private static final String KEY_NICKNAME = "nickname";
-    private static final String DEFAULT_NICKNAME = "User_1234567";
-    private static final String LEGACY_DEFAULT_NICKNAME = "\uB0C9\uB3D9\uB41C \uBE14\uB8E8\uBCA0\uB9AC";
+    private FirebaseFirestore db;
+    private EditText etCommentInput;
+    private Button btnSendComment;
+    private LinearLayout layoutCommentList;
+    private static final String ARG_POST_ID = "postId";
+    private String postId;
+    private String currentUserNickname = "";
 
-    private static final String POST_ID = MyComment.POST_ID_SHANGHAI;
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+
+        super.onCreate(savedInstanceState);
+
+        if (getArguments() != null) {
+
+            postId = getArguments()
+                    .getString(ARG_POST_ID);
+        }
+    }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+
         View view = inflater.inflate(R.layout.layout_bottom_sheet_comment, container, false);
 
-        EditText etCommentInput = view.findViewById(R.id.etCommentInput);
-        Button btnSendComment = view.findViewById(R.id.btnSendComment);
-        LinearLayout layoutCommentList = view.findViewById(R.id.layoutCommentList);
+        db = FirebaseFirestore.getInstance();
+        etCommentInput = view.findViewById(R.id.etCommentInput);
+        btnSendComment = view.findViewById(R.id.btnSendComment);
+        layoutCommentList = view.findViewById(R.id.layoutCommentList);
 
-        List<String> comments = MyComment.getComments(requireContext(), POST_ID);
-        if (!comments.isEmpty()) {
-            layoutCommentList.removeAllViews();
-            String myNickname = getMyNickname();
-            for (String comment : comments) {
-                addCommentViewToLayout(layoutCommentList, myNickname, comment);
-            }
-        }
+        loadCurrentUserNickname();
+        loadComments();
 
         btnSendComment.setOnClickListener(v -> {
-            String comment = etCommentInput.getText().toString().trim();
-            if (comment.isEmpty()) {
-                Toast.makeText(getContext(), "\uB313\uAE00\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694.", Toast.LENGTH_SHORT).show();
+            String content = etCommentInput.getText().toString().trim();
+            if (content.isEmpty()) {
+                Toast.makeText( getContext(), "댓글을 입력해주세요.", Toast.LENGTH_SHORT ).show();
+
                 return;
             }
-
-            if (MyComment.getComments(requireContext(), POST_ID).isEmpty()) {
-                layoutCommentList.removeAllViews();
-            }
-
-            String myNickname = getMyNickname();
-            MyComment.addComment(requireContext(), POST_ID, comment);
-            addCommentViewToLayout(layoutCommentList, myNickname, comment);
-
-            etCommentInput.setText("");
-            Toast.makeText(getContext(), "\uB313\uAE00\uC774 \uB4F1\uB85D\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", Toast.LENGTH_SHORT).show();
+            uploadComment(content);
         });
-
         return view;
     }
 
-    private void addCommentViewToLayout(LinearLayout container, String nickname, String commentText) {
-        LinearLayout commentWrapper = new LinearLayout(getContext());
-        commentWrapper.setOrientation(LinearLayout.VERTICAL);
-        commentWrapper.setPadding(0, 0, 0, 48);
+    public static CommentBottomSheetFragment newInstance(
+            String postId
+    ) {
 
-        TextView tvUserName = new TextView(getContext());
-        tvUserName.setText(nickname);
-        tvUserName.setTextSize(12);
-        tvUserName.setTextColor(0xFF888888);
-        tvUserName.setTypeface(null, android.graphics.Typeface.BOLD);
+        CommentBottomSheetFragment fragment =
+                new CommentBottomSheetFragment();
 
-        TextView tvComment = new TextView(getContext());
-        tvComment.setText(commentText);
-        tvComment.setTextSize(14);
-        tvComment.setTextColor(0xFF000000);
-        tvComment.setPadding(0, 8, 0, 0);
+        Bundle args = new Bundle();
 
-        commentWrapper.addView(tvUserName);
-        commentWrapper.addView(tvComment);
-        container.addView(commentWrapper);
+        args.putString(ARG_POST_ID, postId);
+
+        fragment.setArguments(args);
+
+        return fragment;
     }
 
-    private String getMyNickname() {
-        SharedPreferences prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String nickname = prefs.getString(KEY_NICKNAME, DEFAULT_NICKNAME);
-        if (nickname == null || nickname.trim().isEmpty() || LEGACY_DEFAULT_NICKNAME.equals(nickname)) {
-            prefs.edit().putString(KEY_NICKNAME, DEFAULT_NICKNAME).apply();
-            return DEFAULT_NICKNAME;
+    private void uploadComment(String content) {
+
+        if (FirebaseAuth.getInstance()
+                .getCurrentUser() == null) {
+            return;
         }
-        return nickname;
+
+        String uid = FirebaseAuth
+                .getInstance()
+                .getCurrentUser()
+                .getUid();
+
+        String commentId =
+                UUID.randomUUID().toString();
+
+        Comment comment = new Comment(
+                commentId,
+                uid,
+                currentUserNickname,
+                "",
+                null,
+                content,
+                Timestamp.now()
+        );
+
+        db.collection("posts")
+                .document(postId)
+                .collection("comments")
+                .document(commentId)
+                .set(comment)
+
+                .addOnSuccessListener(unused -> {
+
+                    etCommentInput.setText("");
+
+                    loadComments();
+
+                    Toast.makeText(
+                            getContext(),
+                            "댓글 등록 완료",
+                            Toast.LENGTH_SHORT
+                    ).show();
+
+                    db.collection("posts")
+                            .document(postId)
+                            .update(
+                                    "commentCount",
+                                    FieldValue.increment(1)
+                            );
+                });
+    }
+    private void loadComments() {
+
+        layoutCommentList.removeAllViews();
+
+        db.collection("posts")
+                .document(postId)
+                .collection("comments")
+                .orderBy("createdAt")
+
+                .get()
+
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+
+                    if (queryDocumentSnapshots.isEmpty()) {
+
+                        TextView emptyView = new TextView(getContext());
+                        emptyView.setText( "가장 먼저 댓글을 남겨보세요!" );
+                        emptyView.setTextColor(0xFF999999);
+                        emptyView.setTextSize(14);
+
+                        emptyView.setPadding(
+                                0,
+                                100,
+                                0,
+                                0
+                        );
+
+                        layoutCommentList.addView(emptyView);
+
+                        return;
+                    }
+
+                    for (DocumentSnapshot snapshot
+                            : queryDocumentSnapshots) {
+
+                        Comment comment =
+                                snapshot.toObject(Comment.class);
+
+                        if (comment == null) {
+                            continue;
+                        }
+
+                        addCommentView(
+                                comment.getNickname(),
+                                comment.getContent(),
+                                comment.getProfileImageUrl()
+                        );
+                    }
+                });
+    }
+
+    private void loadCurrentUserNickname() {
+
+        if (FirebaseAuth.getInstance()
+                .getCurrentUser() == null) {
+            return;
+        }
+
+        String uid = FirebaseAuth
+                .getInstance()
+                .getCurrentUser()
+                .getUid();
+
+        db.collection("users")
+                .document(uid)
+                .get()
+
+                .addOnSuccessListener(documentSnapshot -> {
+
+                    if (!documentSnapshot.exists()) {
+                        return;
+                    }
+
+                    String nickname =
+                            documentSnapshot.getString(
+                                    "Nickname"
+                            );
+
+                    if (nickname != null) {
+
+                        currentUserNickname =
+                                nickname;
+                    }
+                });
+    }
+
+    private void addCommentView(
+            String nickname,
+            String content,
+            String profileImageUrl
+    ) {
+
+        LinearLayout commentLayout =
+                new LinearLayout(getContext());
+
+        commentLayout.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
+
+        commentLayout.setPadding(
+                0,
+                24,
+                0,
+                24
+        );
+
+        // 프로필 이미지
+        ImageView ivProfile =
+                new ImageView(getContext());
+
+        LinearLayout.LayoutParams imageParams =
+                new LinearLayout.LayoutParams(
+                        80,
+                        80
+                );
+
+        ivProfile.setLayoutParams(imageParams);
+
+        ivProfile.setImageResource(
+                R.drawable.ic_profile_default
+        );
+
+        // 텍스트 영역
+        LinearLayout textLayout =
+                new LinearLayout(getContext());
+
+        textLayout.setOrientation(
+                LinearLayout.VERTICAL
+        );
+
+        textLayout.setPadding(
+                24,
+                0,
+                0,
+                0
+        );
+
+        // 닉네임
+        TextView tvNickname =
+                new TextView(getContext());
+
+        tvNickname.setText(nickname);
+
+        tvNickname.setTextSize(14);
+
+        tvNickname.setTypeface(
+                null,
+                Typeface.BOLD
+        );
+
+        // 댓글 내용
+        TextView tvContent =
+                new TextView(getContext());
+
+        tvContent.setText(content);
+
+        tvContent.setTextSize(14);
+
+        tvContent.setPadding(
+                0,
+                8,
+                0,
+                0
+        );
+
+        textLayout.addView(tvNickname);
+
+        textLayout.addView(tvContent);
+
+        commentLayout.addView(ivProfile);
+
+        commentLayout.addView(textLayout);
+
+        layoutCommentList.addView(commentLayout);
     }
 
 }
