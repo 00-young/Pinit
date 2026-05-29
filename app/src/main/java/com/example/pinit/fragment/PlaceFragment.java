@@ -311,6 +311,23 @@ public class PlaceFragment extends Fragment {
                 if (city == null || city.isEmpty()) {
                     city = addr.getAdminArea();
                 }
+
+                if (city == null || city.isEmpty()) {
+
+                    String address =
+                            place.getOrDefault("address", "");
+
+                    String[] parts = address.split(" ");
+
+                    if (parts.length >= 2) {
+
+                        city = parts[parts.length - 2];
+
+                    } else {
+
+                        city = trip.getDestination();
+                    }
+                }
             }
 
         } catch (IOException e) {
@@ -373,7 +390,7 @@ public class PlaceFragment extends Fragment {
                 userId,
                 trip.getTitle(),
                 country,
-                trip.getDestination(),
+                city,
                 1,
                 trip.getBudget(),
                 trip.getStartDate(),
