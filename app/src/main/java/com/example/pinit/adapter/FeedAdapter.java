@@ -27,18 +27,14 @@ import java.util.Locale;
 public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
 
     private final List<Post> allPosts = new ArrayList<>();
-
     private final List<Post> visiblePosts = new ArrayList<>();
 
     public FeedAdapter(List<Post> postList) {
-
         allPosts.addAll(postList);
-
         visiblePosts.addAll(postList);
     }
 
     public void updatePosts(List<Post> newPosts) {
-
         allPosts.clear();
         visiblePosts.clear();
 
@@ -49,25 +45,18 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
     }
 
     public void filterByQuery(String query) {
-
         visiblePosts.clear();
 
         List<String> selectedTags = extractTags(query);
 
         if (selectedTags.isEmpty()) {
-
             visiblePosts.addAll(allPosts);
-
         } else {
-
             for (Post post : allPosts) {
-
                 List<String> hashtags = post.getHashtags();
-
                 if (hashtags == null) continue;
 
                 List<String> normalizedTags = new ArrayList<>();
-
                 for (String tag : hashtags) {
                     normalizedTags.add(tag.toLowerCase(Locale.KOREAN));
                 }
@@ -77,41 +66,32 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
                 }
             }
         }
-
         notifyDataSetChanged();
     }
 
     public void sortPostsByLatest() {
-
         Collections.sort(visiblePosts, new Comparator<Post>() {
             @Override
             public int compare(Post p1, Post p2) {
-
                 if (p1.getCreatedAt() == null || p2.getCreatedAt() == null) {
                     return 0;
                 }
-
-                return p2.getCreatedAt()
-                        .compareTo(p1.getCreatedAt());
+                return p2.getCreatedAt().compareTo(p1.getCreatedAt());
             }
         });
-
         notifyDataSetChanged();
     }
 
     public void sortPostsByScrap() {
-
         Collections.sort(visiblePosts, new Comparator<Post>() {
             @Override
             public int compare(Post p1, Post p2) {
-
                 return Integer.compare(
                         p2.getScrapCount(),
                         p1.getScrapCount()
                 );
             }
         });
-
         notifyDataSetChanged();
     }
 
@@ -121,10 +101,8 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
             @NonNull ViewGroup parent,
             int viewType
     ) {
-
         View view = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.item_feed, parent, false);
-
         return new ViewHolder(view);
     }
 
@@ -133,23 +111,24 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
             @NonNull ViewHolder holder,
             int position
     ) {
-
         Post post = visiblePosts.get(position);
 
         holder.userName.setText(post.getUserNickname());
-
         holder.postTitle.setText(post.getTitle());
 
         if (post.getCreatedAt() != null) {
-
             String formattedDate =
                     new SimpleDateFormat(
                             "yyyy. MM. dd",
                             Locale.KOREA
                     ).format(post.getCreatedAt().toDate());
-
             holder.tvPostDate.setText(formattedDate);
         }
+
+        // 조회수 연결 추가
+        holder.tvViewCount.setText(
+                String.valueOf(post.getViewCount())
+        );
 
         holder.tvScrapCount.setText(
                 String.valueOf(post.getScrapCount())
@@ -167,55 +146,27 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
                         post.getUserNickname()
                 );
 
-        holder.profileImage.setOnClickListener(
-                profileClickListener
-        );
-
-        holder.userName.setOnClickListener(
-                profileClickListener
-        );
+        holder.profileImage.setOnClickListener(profileClickListener);
+        holder.userName.setOnClickListener(profileClickListener);
 
         List<String> hashtags = post.getHashtags();
-
         if (hashtags != null) {
-
             for (String tag : hashtags) {
-
                 Chip chip = new Chip(holder.itemView.getContext());
-
                 chip.setText(tag);
-
-                chip.setTextColor(
-                        Color.rgb(34, 34, 34)
-                );
-
+                chip.setTextColor(Color.rgb(34, 34, 34));
                 chip.setTextSize(14);
-
-                chip.setChipBackgroundColor(
-                        ColorStateList.valueOf(
-                                Color.rgb(255, 248, 232)
-                        )
-                );
-
-                chip.setChipStrokeColor(
-                        ColorStateList.valueOf(
-                                Color.rgb(210, 180, 140)
-                        )
-                );
-
+                chip.setChipBackgroundColor(ColorStateList.valueOf(Color.rgb(255, 248, 232)));
+                chip.setChipStrokeColor(ColorStateList.valueOf(Color.rgb(210, 180, 140)));
                 chip.setChipStrokeWidth(1);
-
                 chip.setClickable(false);
-
                 holder.tagGroup.addView(chip);
             }
         }
 
         holder.itemView.setOnClickListener(v -> {
-
             androidx.appcompat.app.AppCompatActivity activity =
-                    (androidx.appcompat.app.AppCompatActivity)
-                            v.getContext();
+                    (androidx.appcompat.app.AppCompatActivity) v.getContext();
 
             PostDetailFragment fragment =
                     PostDetailFragment.newInstance(
@@ -239,28 +190,20 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
     }
 
     private List<String> extractTags(String query) {
-
         List<String> tags = new ArrayList<>();
-
         if (query == null || query.trim().isEmpty()) {
             return tags;
         }
 
         String[] parts = query.trim().split("\\s+#");
-
         for (String part : parts) {
-
             String tag = part.trim();
-
             if (tag.isEmpty()) continue;
-
             if (!tag.startsWith("#")) {
                 tag = "#" + tag;
             }
-
             tags.add(tag.toLowerCase(Locale.KOREAN));
         }
-
         return tags;
     }
 
@@ -268,10 +211,8 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
             View view,
             String userName
     ) {
-
         androidx.appcompat.app.AppCompatActivity activity =
-                (androidx.appcompat.app.AppCompatActivity)
-                        view.getContext();
+                (androidx.appcompat.app.AppCompatActivity) view.getContext();
 
         activity.getSupportFragmentManager()
                 .beginTransaction()
@@ -283,47 +224,32 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
                 .commit();
     }
 
-    public static class ViewHolder
-            extends RecyclerView.ViewHolder {
+    public static class ViewHolder extends RecyclerView.ViewHolder {
 
         View profileImage;
-
         TextView userName;
-
         TextView postTitle;
-
         ChipGroup tagGroup;
 
+        // 조회수 텍스트뷰 변수 선언 추가
+        TextView tvViewCount;
         TextView tvCommentCount;
-
         TextView tvScrapCount;
-
         TextView tvPostDate;
 
         public ViewHolder(@NonNull View itemView) {
-
             super(itemView);
 
-            profileImage =
-                    itemView.findViewById(R.id.profileImage);
+            profileImage = itemView.findViewById(R.id.profileImage);
+            userName = itemView.findViewById(R.id.userName);
+            postTitle = itemView.findViewById(R.id.postTitle);
+            tagGroup = itemView.findViewById(R.id.postTagGroup);
 
-            userName =
-                    itemView.findViewById(R.id.userName);
-
-            postTitle =
-                    itemView.findViewById(R.id.postTitle);
-
-            tagGroup =
-                    itemView.findViewById(R.id.postTagGroup);
-
-            tvCommentCount =
-                    itemView.findViewById(R.id.tvCommentCount);
-
-            tvScrapCount =
-                    itemView.findViewById(R.id.tvScrapCount);
-
-            tvPostDate =
-                    itemView.findViewById(R.id.tvPostDate);
+            // xml의 조회수 아이디와 연결
+            tvViewCount = itemView.findViewById(R.id.tvViewCount);
+            tvCommentCount = itemView.findViewById(R.id.tvCommentCount);
+            tvScrapCount = itemView.findViewById(R.id.tvScrapCount);
+            tvPostDate = itemView.findViewById(R.id.tvPostDate);
         }
     }
 }
