@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="500dp"
     android:orientation="vertical"
@@ -55,6 +56,31 @@
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:background="#EEEEEE" />
+
+    <LinearLayout
+        android:id="@+id/layoutReplyIndicator"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#F5F5F5"
+        android:padding="12dp"
+        android:visibility="gone"
+        android:gravity="center_vertical">
+        <TextView
+            android:id="@+id/tvReplyTo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#555555"
+            android:textSize="12sp"
+            android:text="답글 남기는 중..."/>
+        <ImageView
+            android:id="@+id/btnCancelReply"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            app:tint="#888888"/>
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
