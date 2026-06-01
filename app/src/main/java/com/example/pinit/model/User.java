@@ -13,11 +13,15 @@ public class User {
     private int postCount;
     private int scrapCount;
     private boolean isPrivate;
-    private String budget_type;
-    private String age_group;
+
+    private String ageGroup;
+
     private String companion;
+
     private String theme;
-    
+
+    private String budgetType;
+
     @ServerTimestamp
     private Date createdAt;
     
@@ -30,8 +34,8 @@ public class User {
     // Full constructor
     public User(String email, String nickname, String profileImageUrl, String bio, 
                 int followerCount, int followingCount, int postCount, int scrapCount, 
-                boolean isPrivate, String budget_type, String age_group, 
-                String companion, String theme, Date createdAt, Date updatedAt) {
+                boolean isPrivate, Date createdAt, Date updatedAt, String ageGroup,
+                String companion, String theme, String budgetType) {
         this.email = email;
         this.nickname = nickname;
         this.profileImageUrl = profileImageUrl;
@@ -41,12 +45,12 @@ public class User {
         this.postCount = postCount;
         this.scrapCount = scrapCount;
         this.isPrivate = isPrivate;
-        this.budget_type = budget_type;
-        this.age_group = age_group;
-        this.companion = companion;
-        this.theme = theme;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.ageGroup = ageGroup;
+        this.companion = companion;
+        this.theme = theme;
+        this.budgetType = budgetType;
     }
 
     // Getters and Setters
@@ -77,17 +81,21 @@ public class User {
     public boolean isPrivate() { return isPrivate; }
     public void setPrivate(boolean aPrivate) { isPrivate = aPrivate; }
 
-    public String getBudget_type() { return budget_type; }
-    public void setBudget_type(String budget_type) { this.budget_type = budget_type; }
+    public String getAgeGroup() {
+        return ageGroup;
+    }
 
-    public String getAge_group() { return age_group; }
-    public void setAge_group(String age_group) { this.age_group = age_group; }
+    public String getCompanion() {
+        return companion;
+    }
 
-    public String getCompanion() { return companion; }
-    public void setCompanion(String companion) { this.companion = companion; }
+    public String getTheme() {
+        return theme;
+    }
 
-    public String getTheme() { return theme; }
-    public void setTheme(String theme) { this.theme = theme; }
+    public String getBudgetType() {
+        return budgetType;
+    }
 
     public Date getCreatedAt() { return createdAt; }
     public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
