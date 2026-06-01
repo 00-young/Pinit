@@ -28,7 +28,7 @@ import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FieldPath; // 💡 문서 ID 검색을 위한 import 추가됨!
+import com.google.firebase.firestore.FieldPath; // 문서 ID 검색을 위한 import 추가
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
 
@@ -214,7 +214,7 @@ public class FeedFragment extends Fragment {
         boolean isSearchMode = !keyword.isEmpty() || !selectedTags.isEmpty() || !travelSettingTags.isEmpty();
 
         if (isSearchMode) {
-            // [트랙 2] 검색 조건이 하나라도 있으면 전체 유저 대상으로 DB 검색!
+            // [트랙 2] 검색 조건이 하나라도 있으면 전체 유저 대상으로 DB 검색
             performSearch();
         } else {
             // [트랙 1] 아무 조건도 없으면 홈 피드 (임시 전체 조회로 변경됨)
@@ -222,7 +222,7 @@ public class FeedFragment extends Fragment {
         }
     }
 
-    // 🛣️ 트랙 1: 홈 피드 불러오기 (임시: 전체 게시물 최신순)
+    // 트랙 1: 홈 피드 불러오기 (임시: 전체 게시물 최신순)
     private void loadHomeFeed() {
         FirebaseFirestore.getInstance().collection("posts")
                 .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -231,12 +231,12 @@ public class FeedFragment extends Fragment {
                 .addOnSuccessListener(postSnapshots -> {
                     postList.clear();
 
-                    // 💡 통째로 변환하지 않고, 하나씩 꺼내서 ID를 주입합니다!
+                    // 통째로 변환하지 않고, 하나씩 꺼내서 ID를 주입
                     for (DocumentSnapshot doc : postSnapshots.getDocuments()) {
                         Post post = doc.toObject(Post.class);
                         if (post != null) {
                             try {
-                                // 🌟 Post.kt 수정 없이 강제로 postId를 주입하는 자바의 마법 (리플렉션)
+                                // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
                                 java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
                                 field.setAccessible(true);
                                 field.set(post, doc.getId());
@@ -252,8 +252,7 @@ public class FeedFragment extends Fragment {
                 });
     }
 
-    // 🛣️ 트랙 2: 검색 결과 불러오기 (전체 유저 대상)
-    // 🛣️ 트랙 2: 검색 결과 불러오기 (전체 유저 대상)
+    // 트랙 2: 검색 결과 불러오기 (전체 유저 대상)
     private void performSearch() {
         String keyword = searchEditText.getText().toString().trim();
         if (keyword.isEmpty()) keyword = null;
@@ -301,12 +300,12 @@ public class FeedFragment extends Fragment {
                             .addOnSuccessListener(querySnapshot -> {
                                 postList.clear();
 
-                                // 💡 여기서도 하나씩 꺼내서 ID를 주입합니다!
+                                // 여기서도 하나씩 꺼내서 ID를 주입합니다
                                 for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                                     Post post = doc.toObject(Post.class);
                                     if (post != null) {
                                         try {
-                                            // 🌟 Post.kt 수정 없이 강제로 postId를 주입하는 자바의 마법 (리플렉션)
+                                            // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
                                             java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
                                             field.setAccessible(true);
                                             field.set(post, doc.getId());
