@@ -1,6 +1,7 @@
 package com.example.pinit
 
 data class SearchIndex(
+    val postId: String = "", // 이 부분 추가
     val title: String = "",
     val content: String = "",
     val mainTheme: String = "",

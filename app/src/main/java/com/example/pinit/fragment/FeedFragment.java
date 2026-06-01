@@ -10,7 +10,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
-import android.widget.PopupMenu; // PopupMenu import 추가
+import android.widget.PopupMenu;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -19,11 +19,16 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
+import com.example.pinit.SearchIndex;
+import com.example.pinit.SearchRepository;
 import com.example.pinit.activity.PostSearchActivity;
 import com.example.pinit.adapter.FeedAdapter;
+import com.example.pinit.model.post.Post;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
-import com.example.pinit.model.post.Post;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldPath; // 문서 ID 검색을 위한 import 추가
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
 
@@ -41,9 +46,8 @@ public class FeedFragment extends Fragment {
     private EditText searchEditText;
     private HorizontalScrollView resultTagScroller;
     private ChipGroup resultTagContainer;
-    private Button btnSort; // 정렬 버튼 변수 추가
+    private Button btnSort;
 
-    // 기존 태그와 여행 설정 태그를 따로 관리합니다.
     private final Set<String> selectedTags = new LinkedHashSet<>();
     private final List<String> travelSettingTags = new ArrayList<>();
 
@@ -71,10 +75,7 @@ public class FeedFragment extends Fragment {
 
         String query = "";
         if (getArguments() != null) {
-            // 1. 검색어 꺼내기
             query = getArguments().getString(PostSearchActivity.EXTRA_SEARCH_QUERY, "");
-
-            //  2. MainActivity에서 넣어준 여행 설정 데이터 꺼내기
             ArrayList<String> settings = getArguments().getStringArrayList(PostSearchActivity.EXTRA_TRAVEL_SETTINGS);
             if (settings != null) {
                 travelSettingTags.addAll(settings);
@@ -84,9 +85,8 @@ public class FeedFragment extends Fragment {
         searchEditText = view.findViewById(R.id.searchEditText);
         resultTagScroller = view.findViewById(R.id.resultTagScroller);
         resultTagContainer = view.findViewById(R.id.resultTagContainer);
-        btnSort = view.findViewById(R.id.btnSort); // 정렬 버튼 연결
+        btnSort = view.findViewById(R.id.btnSort);
 
-        // 드롭다운 정렬 버튼 로직 추가
         btnSort.setOnClickListener(v -> {
             PopupMenu popup = new PopupMenu(getContext(), btnSort);
             popup.getMenu().add("최신순");
@@ -108,7 +108,6 @@ public class FeedFragment extends Fragment {
 
         searchEditText.setFocusable(false);
         setInitialQuery(query);
-        applyFilter();
 
         searchEditText.setOnClickListener(v -> openSearchScreen());
 
@@ -141,19 +140,15 @@ public class FeedFragment extends Fragment {
         visibleQuery = visibleQuery.replaceAll("\\s+", " ").trim();
         searchEditText.setText(visibleQuery);
 
-        // 두 종류의 태그를 모두 그리는 함수로 이름 변경
         renderAllTags();
     }
 
-    // 기존 태그(베이지)와 여행 설정 태그(흰색)를 함께 그려주는 핵심 로직
     private void renderAllTags() {
         resultTagContainer.removeAllViews();
 
-        // 두 태그 리스트가 모두 비어있을 때만 스크롤 영역을 숨깁니다.
         boolean hasAnyTags = !selectedTags.isEmpty() || !travelSettingTags.isEmpty();
         resultTagScroller.setVisibility(hasAnyTags ? View.VISIBLE : View.GONE);
 
-        // 1. 기존 해시태그 렌더링 (베이지색)
         for (String tag : selectedTags) {
             Chip chip = new Chip(requireContext());
             chip.setText(tag);
@@ -169,12 +164,11 @@ public class FeedFragment extends Fragment {
             chip.setOnCloseIconClickListener(v -> {
                 selectedTags.remove(tag);
                 renderAllTags();
-                applyFilter();
+                loadPosts(); // 로컬 필터 대신 새로 DB를 찔러 검색합니다.
             });
             resultTagContainer.addView(chip);
         }
 
-        // 2. 여행 설정 태그 렌더링 (하얀색 바탕, 얇은 회색 테두리)
         for (String tag : travelSettingTags) {
             Chip chip = new Chip(requireContext());
             chip.setText(tag);
@@ -190,31 +184,10 @@ public class FeedFragment extends Fragment {
             chip.setOnCloseIconClickListener(v -> {
                 travelSettingTags.remove(tag);
                 renderAllTags();
-                applyFilter();
+                loadPosts(); // 로컬 필터 대신 새로 DB를 찔러 검색합니다.
             });
             resultTagContainer.addView(chip);
         }
-    }
-
-    private void applyFilter() {
-        adapter.filterByQuery(buildSearchQuery());
-    }
-
-    // 어댑터(게시물 목록)가 필터링을 제대로 할 수 있도록, 여행 설정 태그도 검색어에 포함시켜 줍니다.
-    private String buildSearchQuery() {
-        String typedQuery = searchEditText.getText().toString().trim();
-        StringBuilder queryBuilder = new StringBuilder(typedQuery);
-
-        for (String tag : selectedTags) {
-            if (queryBuilder.length() > 0) queryBuilder.append(' ');
-            queryBuilder.append(tag);
-        }
-        for (String tag : travelSettingTags) {
-            if (queryBuilder.length() > 0) queryBuilder.append(' ');
-            queryBuilder.append(tag);
-        }
-
-        return queryBuilder.toString().trim();
     }
 
     private String buildEditableSearchQuery() {
@@ -231,31 +204,123 @@ public class FeedFragment extends Fragment {
 
     private void openSearchScreen() {
         Intent intent = new Intent(requireContext(), PostSearchActivity.class);
-        // 검색바를 눌러 돌아갈 때는 모든 조건을 하나로 뭉쳐서 가져갑니다.
         intent.putExtra(PostSearchActivity.EXTRA_SEARCH_QUERY, buildEditableSearchQuery());
         intent.putStringArrayListExtra(PostSearchActivity.EXTRA_TRAVEL_SETTINGS, new ArrayList<>(travelSettingTags));
         startActivity(intent);
     }
+
     private void loadPosts() {
+        String keyword = searchEditText.getText().toString().trim();
+        boolean isSearchMode = !keyword.isEmpty() || !selectedTags.isEmpty() || !travelSettingTags.isEmpty();
 
-        FirebaseFirestore.getInstance()
-                .collection("posts")
-                .orderBy(
-                        "createdAt",
-                        Query.Direction.DESCENDING
-                )
+        if (isSearchMode) {
+            // [트랙 2] 검색 조건이 하나라도 있으면 전체 유저 대상으로 DB 검색
+            performSearch();
+        } else {
+            // [트랙 1] 아무 조건도 없으면 홈 피드 (임시 전체 조회로 변경됨)
+            loadHomeFeed();
+        }
+    }
+
+    // 트랙 1: 홈 피드 불러오기 (임시: 전체 게시물 최신순)
+    private void loadHomeFeed() {
+        FirebaseFirestore.getInstance().collection("posts")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(20) // 일단 최신 글 20개만 가져오기
                 .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
-
+                .addOnSuccessListener(postSnapshots -> {
                     postList.clear();
 
-                    postList.addAll(
-                            queryDocumentSnapshots.toObjects(Post.class)
-                    );
+                    // 통째로 변환하지 않고, 하나씩 꺼내서 ID를 주입
+                    for (DocumentSnapshot doc : postSnapshots.getDocuments()) {
+                        Post post = doc.toObject(Post.class);
+                        if (post != null) {
+                            try {
+                                // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
+                                java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
+                                field.setAccessible(true);
+                                field.set(post, doc.getId());
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            postList.add(post);
+                        }
+                    }
 
                     adapter.updatePosts(postList);
-
                     adapter.sortPostsByLatest();
                 });
+    }
+
+    // 트랙 2: 검색 결과 불러오기 (전체 유저 대상)
+    private void performSearch() {
+        String keyword = searchEditText.getText().toString().trim();
+        if (keyword.isEmpty()) keyword = null;
+
+        Long travelerCount = null;
+        String location = null;
+        String filterStartDate = null;
+        String filterEndDate = null;
+
+        for (String tag : travelSettingTags) {
+            if (tag.contains("명")) {
+                try { travelerCount = Long.parseLong(tag.replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
+            } else if (tag.contains("~")) {
+                String[] parts = tag.split("~");
+                filterStartDate = parts[0].trim().replace("/", "-");
+                filterEndDate = parts[1].trim().replace("/", "-");
+            } else {
+                location = tag;
+            }
+        }
+
+        SearchRepository repository = new SearchRepository();
+        repository.search(
+                keyword, travelerCount, location, null, null, filterStartDate, filterEndDate,
+                new ArrayList<>(selectedTags),
+                searchIndices -> {
+                    List<String> postIds = new ArrayList<>();
+                    for (SearchIndex index : searchIndices) {
+                        if (index.getPostId() != null && !index.getPostId().isEmpty()) {
+                            postIds.add(index.getPostId());
+                        }
+                    }
+
+                    if (postIds.isEmpty()) {
+                        postList.clear();
+                        adapter.updatePosts(postList);
+                        return kotlin.Unit.INSTANCE;
+                    }
+
+                    List<String> safePostIds = postIds.size() > 10 ? postIds.subList(0, 10) : postIds;
+
+                    FirebaseFirestore.getInstance().collection("posts")
+                            .whereIn(com.google.firebase.firestore.FieldPath.documentId(), safePostIds)
+                            .get()
+                            .addOnSuccessListener(querySnapshot -> {
+                                postList.clear();
+
+                                // 여기서도 하나씩 꺼내서 ID를 주입합니다
+                                for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                                    Post post = doc.toObject(Post.class);
+                                    if (post != null) {
+                                        try {
+                                            // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
+                                            java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
+                                            field.setAccessible(true);
+                                            field.set(post, doc.getId());
+                                        } catch (Exception e) {
+                                            e.printStackTrace();
+                                        }
+                                        postList.add(post);
+                                    }
+                                }
+
+                                adapter.updatePosts(postList);
+                                adapter.sortPostsByLatest();
+                            });
+                    return kotlin.Unit.INSTANCE;
+                }
+        );
     }
 }
