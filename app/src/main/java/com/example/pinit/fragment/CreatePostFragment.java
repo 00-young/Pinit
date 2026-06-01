@@ -34,16 +34,14 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.pinit.R;
 import com.example.pinit.activity.PlaceSearchActivity;
 import com.example.pinit.activity.PostTravelSettingActivity;
-import com.example.pinit.adapter.ScheduleDetailAdapter; // 기능팀 어댑터 추가됨!
+import com.example.pinit.adapter.ScheduleDetailAdapter;
 import com.example.pinit.database.PlacesApiHelper;
 import com.example.pinit.manager.FirebaseManager;
 import com.example.pinit.model.DailySchedule;
 import com.example.pinit.model.MyPlan;
 import com.example.pinit.model.User;
-
 import com.example.pinit.model.post.ContentBlock;
 import com.example.pinit.model.post.Post;
-
 import com.example.pinit.repository.PostRepository;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -57,6 +55,7 @@ import com.google.android.gms.maps.model.PolylineOptions;
 
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore; // DB 조회를 위해 추가됨
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -102,11 +101,30 @@ public class CreatePostFragment extends Fragment {
 
     // 대표 이미지 Uri
     private Uri thumbnailUri;
-    private ProgressDialog progressDialog; // 로딩 팝업용 변수 추가
+    private ProgressDialog progressDialog;
+
+    // 수정 모드를 위한 변수 추가
+    private String editPostId = null;
+    private boolean isEditMode = false;
+
+    // PostDetailFragment에서 수정하러 넘어올 때 사용하는 생성자
+    public static CreatePostFragment newInstanceForEdit(String postId) {
+        CreatePostFragment fragment = new CreatePostFragment();
+        Bundle args = new Bundle();
+        args.putString("postId", postId);
+        fragment.setArguments(args);
+        return fragment;
+    }
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // 넘어온 postId가 있다면 수정 모드(Edit Mode)로 설정
+        if (getArguments() != null && getArguments().containsKey("postId")) {
+            editPostId = getArguments().getString("postId");
+            isEditMode = true;
+        }
 
         travelSettingLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -126,16 +144,10 @@ public class CreatePostFragment extends Fragment {
         galleryLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
-
-                    if (result.getResultCode() == Activity.RESULT_OK
-                            && result.getData() != null) {
-
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                         Uri imageUri = result.getData().getData();
                         if (imageUri != null && ivSelectedPhoto != null) {
-
-                            // Firebase 업로드용 저장
                             thumbnailUri = imageUri;
-
                             ivSelectedPhoto.setImageURI(imageUri);
                             ivSelectedPhoto.setVisibility(View.VISIBLE);
                         }
@@ -174,7 +186,6 @@ public class CreatePostFragment extends Fragment {
                 }
         );
 
-        // 내 일정 불러오기 완료 시 화면 그리기
         getParentFragmentManager().setFragmentResultListener("planResult", this, (requestKey, bundle) -> {
             MyPlan selectedPlan = (MyPlan) bundle.getSerializable("selectedPlan");
             if (selectedPlan != null && layoutDynamicContent != null) {
@@ -189,29 +200,24 @@ public class CreatePostFragment extends Fragment {
                         TextView tvTitle = dayBlockView.findViewById(R.id.tvTemplateDayTitle);
                         RecyclerView rvPlaces = dayBlockView.findViewById(R.id.rvTemplatePlaces);
                         MapView mapView = dayBlockView.findViewById(R.id.mapTemplateView);
-
-                        // 더보기 버튼 연결
                         Button btnReadMore = dayBlockView.findViewById(R.id.btnReadMore);
 
                         tvTitle.setText(currentDay.getDayTitle() + " (" + currentDay.getDate() + ")");
 
-                        // 지도 세팅 (기능팀 Geocode API 호출)
                         if (mapView != null) {
                             mapView.onCreate(null);
                             mapView.onResume();
                             mapView.getMapAsync(googleMap -> {
-                                googleMap.getUiSettings().setAllGesturesEnabled(false); // 게시물 화면에선 지도 고정
+                                googleMap.getUiSettings().setAllGesturesEnabled(false);
                                 showPinsForPlaces(googleMap, currentDay.getPlaces());
                             });
                         }
 
-                        // 리스트 뷰를 기능팀의 ScheduleDetailAdapter로 교체 (정렬 및 UI 일치!)
                         rvPlaces.setLayoutManager(new LinearLayoutManager(getContext()));
-                        rvPlaces.setNestedScrollingEnabled(false); // 스크롤 뷰 안에서 리스트가 안 잘리고 전부 다 펴지게 만듭니다
+                        rvPlaces.setNestedScrollingEnabled(false);
                         rvPlaces.setAdapter(new ScheduleDetailAdapter(getContext(), currentDay.getScheduleObjects(),
                                 schedule -> {}, id -> {}, schedule -> {}));
 
-                        // 더보기 버튼 작동 로직 구현
                         rvPlaces.setVisibility(View.GONE);
                         if (btnReadMore != null) {
                             btnReadMore.setOnClickListener(v -> {
@@ -242,7 +248,6 @@ public class CreatePostFragment extends Fragment {
             }
         });
 
-        // 태그 수신
         getParentFragmentManager().setFragmentResultListener("tagResult", this, (requestKey, bundle) -> {
             ArrayList<String> selectedTags = bundle.getStringArrayList("selectedTags");
             if (selectedTags != null && layoutTagsContainer != null) {
@@ -262,7 +267,6 @@ public class CreatePostFragment extends Fragment {
             }
         });
 
-        // 지출 수신
         getParentFragmentManager().setFragmentResultListener("budgetResult", this, (requestKey, bundle) -> {
             if (layoutImportedBudget != null) {
                 layoutImportedBudget.setVisibility(View.VISIBLE);
@@ -277,9 +281,6 @@ public class CreatePostFragment extends Fragment {
         });
     }
 
-    // ==========================================
-    // 기능팀 지도 로직 (API 좌표 변환 및 선 그리기)
-    // ==========================================
     private void showPinsForPlaces(GoogleMap googleMap, List<String> places) {
         if (places == null || places.isEmpty()) return;
 
@@ -362,8 +363,6 @@ public class CreatePostFragment extends Fragment {
             }
         }).start();
     }
-    // ==========================================
-
 
     @Nullable
     @Override
@@ -372,7 +371,6 @@ public class CreatePostFragment extends Fragment {
             @Nullable ViewGroup container,
             @Nullable Bundle savedInstanceState
     ) {
-
         View view = inflater.inflate(
                 R.layout.fragment_create_post,
                 container,
@@ -394,10 +392,7 @@ public class CreatePostFragment extends Fragment {
         etBudgetSightseeing = view.findViewById(R.id.etBudgetSightseeing);
         etBudgetEtc = view.findViewById(R.id.etBudgetEtc);
 
-        // 게시글 제목 EditText
         etPostTitle = view.findViewById(R.id.etPostTitle);
-
-        // 업로드 버튼
         btnUpload = view.findViewById(R.id.btnRegister);
 
         btnUpload.setOnClickListener(v -> uploadPost());
@@ -431,7 +426,6 @@ public class CreatePostFragment extends Fragment {
             bottomSheet.show(getParentFragmentManager(), "BudgetBottomSheet");
         });
 
-        // 일정 바텀시트 호출
         view.findViewById(R.id.btnLoadMyPlan).setOnClickListener(v -> {
             MyPlansBottomSheetFragment bottomSheet = new MyPlansBottomSheetFragment();
             bottomSheet.show(getParentFragmentManager(), "MyPlansBottomSheet");
@@ -453,10 +447,30 @@ public class CreatePostFragment extends Fragment {
             placeSearchLauncher.launch(intent);
         });
 
+        // 수정 모드일 경우 버튼 텍스트 변경 및 기존 데이터 불러오기
+        if (isEditMode) {
+            btnUpload.setText("수정하기");
+            loadExistingPostData();
+        }
+
         return view;
     }
 
-    // Firebase 업로드 함수
+    // 기존 게시물 데이터를 불러오는 함수
+    private void loadExistingPostData() {
+        FirebaseFirestore.getInstance().collection("posts").document(editPostId)
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        Post post = documentSnapshot.toObject(Post.class);
+                        if (post != null) {
+                            etPostTitle.setText(post.getTitle());
+                            // TODO: 필요시 본문(ContentBlocks)이나 예산, 태그 등을 불러와서 UI에 세팅하는 로직 확장 가능
+                        }
+                    }
+                });
+    }
+
     private void uploadPost() {
         String title = etPostTitle.getText().toString().trim();
 
@@ -465,13 +479,11 @@ public class CreatePostFragment extends Fragment {
             return;
         }
 
-        //  1. 여기서부터 로딩 시작 (버튼 연타 방지)
         progressDialog = new ProgressDialog(getContext());
-        progressDialog.setMessage("게시물을 업로드하는 중입니다...\n잠시만 기다려주세요.");
-        progressDialog.setCancelable(false); // 로딩 중에 화면 바깥 터치 무시
+        progressDialog.setMessage(isEditMode ? "게시물을 수정하는 중입니다...\n잠시만 기다려주세요." : "게시물을 업로드하는 중입니다...\n잠시만 기다려주세요.");
+        progressDialog.setCancelable(false);
         progressDialog.show();
 
-        // 에뮬레이터 테스트용 가짜 Uri 방어 코드 (이미지가 null일 때만 발동)
         if (thumbnailUri == null) {
             thumbnailUri = Uri.parse("android.resource://" + requireContext().getPackageName() + "/" + R.mipmap.ic_launcher);
         }
@@ -488,7 +500,6 @@ public class CreatePostFragment extends Fragment {
 
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
 
-        // 실제 닉네임을 가져오기 위해 FirebaseManager 활용
         FirebaseManager.getInstance().getUserData(email, new FirebaseManager.OnUserLoadedListener() {
             @Override
             public void onUserLoaded(User user) {
@@ -498,30 +509,29 @@ public class CreatePostFragment extends Fragment {
 
             @Override
             public void onFailure(Exception e) {
-                // 실패 시 이메일 앞부분이라도 임시로 사용
                 String fallbackNickname = email.split("@")[0];
                 executeUpload(title, uid, fallbackNickname);
             }
         });
     }
-    private void executeUpload(String title, String uid, String nickname) {
-        String postId = UUID.randomUUID().toString();
 
-        // 1. 실제 유저 정보 반영하여 Post 생성
+    private void executeUpload(String title, String uid, String nickname) {
+        // 수정 모드면 기존 ID(editPostId)를 그대로 쓰고, 아니면 새 ID를 발급
+        String finalPostId = isEditMode ? editPostId : UUID.randomUUID().toString();
+
         Post post = new Post(
-                postId,
+                finalPostId,
                 uid,
                 nickname,
                 title,
                 "image",
                 "",
                 Collections.singletonList("여행"),
-                0, 0, 0, 0, // 초기 카운트들
+                0, 0, 0, 0,
                 false,
                 Timestamp.now()
         );
 
-        // 2. 화면(layoutDynamicContent)에 추가된 뷰들을 돌면서 사용자가 쓴 글 싹 다 긁어모으기
         List<ContentBlock> blocks = new ArrayList<>();
         int childCount = layoutDynamicContent.getChildCount();
         int sequence = 0;
@@ -529,7 +539,6 @@ public class CreatePostFragment extends Fragment {
         for (int i = 0; i < childCount; i++) {
             View child = layoutDynamicContent.getChildAt(i);
 
-            // 사용자가 추가한 한 줄 평 / 일정 댓글 (EditText인 경우)
             if (child instanceof EditText) {
                 String commentText = ((EditText) child).getText().toString().trim();
                 if (!commentText.isEmpty()) {
@@ -544,7 +553,6 @@ public class CreatePostFragment extends Fragment {
                     blocks.add(textBlock);
                 }
             }
-            // 불러온 장소 카드뷰나 일괄 일정 블록인 경우
             else if (child.getId() == R.id.tvInsertedPlaceName) {
                 TextView tvPlaceName = child.findViewById(R.id.tvInsertedPlaceName);
                 if (tvPlaceName != null) {
@@ -561,37 +569,34 @@ public class CreatePostFragment extends Fragment {
             }
         }
 
-        // 사용자가 아무 글도 안 썼다면 최소한 하나의 기본 블록이라도 넣어 처리
         if (blocks.isEmpty()) {
             blocks.add(new ContentBlock(UUID.randomUUID().toString(), "text", "등록된 본문 내용이 없습니다.", "", null, 0));
         }
 
-        // 3. 진짜 데이터들 매개변수로 던지기
         postRepository.uploadPost(
                 post,
                 thumbnailUri,
                 blocks,
                 () -> {
-                    //  2. 성공 시 로딩 다이얼로그 끄기
                     if (progressDialog != null && progressDialog.isShowing()) {
                         progressDialog.dismiss();
                     }
-                    Toast.makeText(getContext(), "업로드 성공!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), isEditMode ? "수정 성공!" : "업로드 성공!", Toast.LENGTH_SHORT).show();
                     if (getActivity() != null) {
                         requireActivity().getSupportFragmentManager().popBackStack();
                     }
                     return null;
                 },
                 e -> {
-                    //  3. 실패 시 로딩 다이얼로그 끄고 에러 메시지 띄우기
                     if (progressDialog != null && progressDialog.isShowing()) {
                         progressDialog.dismiss();
                     }
-                    Toast.makeText(getContext(), "업로드 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), (isEditMode ? "수정 실패: " : "업로드 실패: ") + e.getMessage(), Toast.LENGTH_SHORT).show();
                     return null;
                 }
         );
     }
+
     private void bindHeaderMyPageButton(View rootView) {
         if (!(rootView instanceof LinearLayout)) return;
     }
@@ -621,7 +626,6 @@ public class CreatePostFragment extends Fragment {
         layoutTravelSettingTagsContainer.addView(tvTag);
     }
 
-    //  요구사항 1: 예산 합산 로직 함수
     private void calculateTotalBudget() {
         int food = parseBudgetNumber(etBudgetFood.getText().toString());
         int transport = parseBudgetNumber(etBudgetTransport.getText().toString());
@@ -633,7 +637,6 @@ public class CreatePostFragment extends Fragment {
         tvTotalBudget.setText("총 " + total + "만원");
     }
 
-    // 공백이나 문자가 들어왔을 때 앱이 튕기지 않게 안전하게 0으로 변환해주는 함수
     private int parseBudgetNumber(String text) {
         try { return (text == null || text.trim().isEmpty()) ? 0 : Integer.parseInt(text.trim()); }
         catch (NumberFormatException e) { return 0; }

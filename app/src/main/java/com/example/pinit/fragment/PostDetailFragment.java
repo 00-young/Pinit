@@ -53,6 +53,8 @@ public class PostDetailFragment extends Fragment {
     private TextView tvPostTitle;
     private TextView tvAuthorName;
     private TextView tvPostDate;
+    private TextView btnEditPost;
+    private TextView btnDeletePost;
     private ImageView btnActionScrap;
     private ImageView btnActionShare;
 
@@ -154,6 +156,9 @@ public class PostDetailFragment extends Fragment {
         tvAuthorName = view.findViewById(R.id.tvAuthorName);
 
         tvPostDate = view.findViewById(R.id.tvPostDate);
+
+        btnEditPost = view.findViewById(R.id.btnEditPost);
+        btnDeletePost = view.findViewById(R.id.btnDeletePost);
 
         return view;
     }
@@ -327,19 +332,12 @@ public class PostDetailFragment extends Fragment {
     }
 
     private void bindPostData(Post post) {
-
         tvPostTitle.setText(post.getTitle());
         tvAuthorName.setText(post.getUserNickname());
 
-        // 작성자 클릭 시 상대방 마이페이지로 이동 (실제 데이터 연동)
         View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
         if (authorRow != null) {
             authorRow.setOnClickListener(v -> {
-                // Post 객체에 작성자 이메일 정보가 있다고 가정 (userId 필드가 이메일인 경우)
-                // 만약 userId가 UID라면 OtherMyPageFragment에서 UID 지원 로직이 필요함.
-                // 현재 스키마상 userId는 UID이므로, UID를 기반으로 이동하도록 연동.
-                // OtherMyPageFragment.newInstanceWithEmail()가 이메일을 받으므로 UID로 이메일을 먼저 찾거나
-                // 스키마 설계를 맞춰야 함. 여기서는 기존 OtherMyPageFragment가 닉네임 또는 이메일을 받는 방식을 활용.
                 getParentFragmentManager().beginTransaction()
                         .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(post.getUserId()))
                         .addToBackStack(null)
@@ -348,14 +346,32 @@ public class PostDetailFragment extends Fragment {
         }
 
         if (post.getCreatedAt() != null) {
-            String formattedDate =
-                    new java.text.SimpleDateFormat(
-                            "yyyy. MM. dd",
-                            java.util.Locale.KOREA
-                    ).format(
-                            post.getCreatedAt().toDate()
-                    );
+            String formattedDate = new java.text.SimpleDateFormat("yyyy. MM. dd", java.util.Locale.KOREA)
+                    .format(post.getCreatedAt().toDate());
             tvPostDate.setText(formattedDate);
+        }
+
+        //  내 게시물인지 확인하고 수정/삭제 버튼 노출하기
+        String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
+                FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
+
+        if (post.getUserId().equals(currentUid)) {
+            if (btnEditPost != null) btnEditPost.setVisibility(View.VISIBLE);
+            if (btnDeletePost != null) btnDeletePost.setVisibility(View.VISIBLE);
+
+            // 삭제 버튼 클릭 이벤트
+            if (btnDeletePost != null) {
+                btnDeletePost.setOnClickListener(v -> deleteMyPost());
+            }
+
+            // 수정 버튼 클릭 이벤트
+            if (btnEditPost != null) {
+                btnEditPost.setOnClickListener(v -> editMyPost());
+            }
+        } else {
+            // 내 글이 아니면 숨김 처리
+            if (btnEditPost != null) btnEditPost.setVisibility(View.GONE);
+            if (btnDeletePost != null) btnDeletePost.setVisibility(View.GONE);
         }
     }
 
@@ -537,5 +553,36 @@ public class PostDetailFragment extends Fragment {
         googleMap.setOnMapLoadedCallback(() ->
                 googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 100))
         );
+    }
+
+    // 게시물 삭제 로직
+    private void deleteMyPost() {
+        new android.app.AlertDialog.Builder(getContext())
+                .setTitle("게시물 삭제")
+                .setMessage("정말로 이 게시물을 삭제하시겠습니까?\n삭제된 게시물은 복구할 수 없습니다.")
+                .setPositiveButton("삭제", (dialog, which) -> {
+                    // Firebase에서 게시물 삭제
+                    db.collection("posts").document(postId).delete()
+                            .addOnSuccessListener(aVoid -> {
+                                Toast.makeText(getContext(), "게시물이 삭제되었습니다.", Toast.LENGTH_SHORT).show();
+                                // 삭제 성공 시 이전 화면(피드 등)으로 돌아가기
+                                getParentFragmentManager().popBackStack();
+                            })
+                            .addOnFailureListener(e -> {
+                                Toast.makeText(getContext(), "삭제 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            });
+                })
+                .setNegativeButton("취소", null)
+                .show();
+    }
+
+    //  게시물 수정 로직
+    private void editMyPost() {
+        Toast.makeText(getContext(), "게시물 수정 화면으로 이동합니다.", Toast.LENGTH_SHORT).show();
+
+        getParentFragmentManager().beginTransaction()
+                .replace(R.id.fragmentContainer, CreatePostFragment.newInstanceForEdit(postId))
+                .addToBackStack(null)
+                .commit();
     }
 }
