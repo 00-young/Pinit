@@ -9,7 +9,7 @@ properties.load(project.rootProject.file("apikey.properties").newDataInputStream
 
 android {
     namespace 'com.example.pinit'
-    compileSdk 34
+    compileSdk 36
 
     buildFeatures {
         buildConfig true

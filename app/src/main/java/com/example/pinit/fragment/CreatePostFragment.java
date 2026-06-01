@@ -35,8 +35,10 @@ import com.example.pinit.activity.PlaceSearchActivity;
 import com.example.pinit.activity.PostTravelSettingActivity;
 import com.example.pinit.adapter.ScheduleDetailAdapter; // 기능팀 어댑터 추가됨!
 import com.example.pinit.database.PlacesApiHelper;
+import com.example.pinit.manager.FirebaseManager;
 import com.example.pinit.model.DailySchedule;
 import com.example.pinit.model.MyPlan;
+import com.example.pinit.model.User;
 
 import com.example.pinit.model.post.ContentBlock;
 import com.example.pinit.model.post.Post;
@@ -454,115 +456,127 @@ public class CreatePostFragment extends Fragment {
 
     // Firebase 업로드 함수
     private void uploadPost() {
-
         String title = etPostTitle.getText().toString().trim();
 
         if (title.isEmpty()) {
-
-            Toast.makeText(
-                    getContext(),
-                    "게시글 제목을 입력하세요",
-                    Toast.LENGTH_SHORT
-            ).show();
-
+            Toast.makeText(getContext(), "게시글 제목을 입력하세요", Toast.LENGTH_SHORT).show();
             return;
         }
 
+        // 에뮬레이터 테스트용 가짜 Uri 방어 코드 (이미지가 null일 때만 발동)
         if (thumbnailUri == null) {
+            thumbnailUri = Uri.parse("android.resource://" + requireContext().getPackageName() + "/" + R.mipmap.ic_launcher);
+        }
 
-            Toast.makeText(
-                    getContext(),
-                    "대표 이미지를 선택하세요",
-                    Toast.LENGTH_SHORT
-            ).show();
+        String email = FirebaseAuth.getInstance().getCurrentUser() != null
+                ? FirebaseAuth.getInstance().getCurrentUser().getEmail()
+                : "";
 
+        if (email.isEmpty()) {
+            Toast.makeText(getContext(), "로그인이 필요합니다", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        String uid =
-                FirebaseAuth.getInstance().getCurrentUser() != null
-                        ? FirebaseAuth.getInstance()
-                        .getCurrentUser()
-                        .getUid()
-                        : "";
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
 
-        if (uid.isEmpty()) {
+        // 💡 실제 닉네임을 가져오기 위해 FirebaseManager 활용
+        FirebaseManager.getInstance().getUserData(email, new FirebaseManager.OnUserLoadedListener() {
+            @Override
+            public void onUserLoaded(User user) {
+                String nickname = user.getNickname();
+                executeUpload(title, uid, nickname);
+            }
 
-            Toast.makeText(
-                    getContext(),
-                    "로그인이 필요합니다",
-                    Toast.LENGTH_SHORT
-            ).show();
+            @Override
+            public void onFailure(Exception e) {
+                // 실패 시 이메일 앞부분이라도 임시로 사용
+                String fallbackNickname = email.split("@")[0];
+                executeUpload(title, uid, fallbackNickname);
+            }
+        });
+    }
 
-            return;
-        }
-
+    private void executeUpload(String title, String uid, String nickname) {
         String postId = UUID.randomUUID().toString();
 
+        // 1. 실제 유저 정보 반영하여 Post 생성
         Post post = new Post(
                 postId,
                 uid,
-                "test",
+                nickname, // 👈 "test" 대신 실제 닉네임 주입!
                 title,
                 "image",
                 "",
                 Collections.singletonList("여행"),
-                0,
-                0,
-                0,
-                0,
+                0, 0, 0, 0, // 초기 카운트들
                 false,
                 Timestamp.now()
         );
 
-        ContentBlock textBlock = new ContentBlock(
-                UUID.randomUUID().toString(),
-                "text",
-                "게시글 내용",
-                "",
-                null,
-                0
-        );
+        // 💡 2. [핵심] 화면(layoutDynamicContent)에 추가된 뷰들을 돌면서 사용자가 쓴 글 싹 다 긁어모으기!
+        List<ContentBlock> blocks = new ArrayList<>();
+        int childCount = layoutDynamicContent.getChildCount();
+        int sequence = 0;
 
-        List<ContentBlock> blocks =
-                Collections.singletonList(textBlock);
+        for (int i = 0; i < childCount; i++) {
+            View child = layoutDynamicContent.getChildAt(i);
 
+            // 사용자가 추가한 한 줄 평 / 일정 댓글 (EditText인 경우)
+            if (child instanceof EditText) {
+                String commentText = ((EditText) child).getText().toString().trim();
+                if (!commentText.isEmpty()) {
+                    ContentBlock textBlock = new ContentBlock(
+                            UUID.randomUUID().toString(),
+                            "text",        // 블록 타입: 텍스트
+                            commentText,   // 사용자가 진짜 입력한 본문 내용!
+                            "",
+                            null,
+                            sequence++
+                    );
+                    blocks.add(textBlock);
+                }
+            }
+            // 불러온 장소 카드뷰나 일괄 일정 블록인 경우 (필요시 장소명도 추출 가능)
+            else if (child.getId() == R.id.tvInsertedPlaceName) {
+                // 여기에 장소 데이터 블록화하는 코드를 팀원 스펙에 맞춰 확장할 수 있습니다.
+                TextView tvPlaceName = child.findViewById(R.id.tvInsertedPlaceName);
+                if (tvPlaceName != null) {
+                    ContentBlock placeBlock = new ContentBlock(
+                            UUID.randomUUID().toString(),
+                            "place",
+                            tvPlaceName.getText().toString(),
+                            "",
+                            null,
+                            sequence++
+                    );
+                    blocks.add(placeBlock);
+                }
+            }
+        }
+
+        // 💡 만약 사용자가 아무 글도 안 썼다면 최소한 하나의 기본 블록이라도 넣어 처리
+        if (blocks.isEmpty()) {
+            blocks.add(new ContentBlock(UUID.randomUUID().toString(), "text", "등록된 본문 내용이 없습니다.", "", null, 0));
+        }
+
+        // 3. 진짜 데이터들 매개변수로 던지기
         postRepository.uploadPost(
-
                 post,
-
                 thumbnailUri,
-
-                blocks,
-
+                blocks, // 👈 하드코딩 대신 진짜 리스트 전달!
                 () -> {
-
-                    Toast.makeText(
-                            getContext(),
-                            "업로드 성공",
-                            Toast.LENGTH_SHORT
-                    ).show();
-
-                    requireActivity()
-                            .getSupportFragmentManager()
-                            .popBackStack();
-
+                    Toast.makeText(getContext(), "업로드 성공!", Toast.LENGTH_SHORT).show();
+                    if (getActivity() != null) {
+                        requireActivity().getSupportFragmentManager().popBackStack();
+                    }
                     return null;
                 },
-
                 e -> {
-
-                    Toast.makeText(
-                            getContext(),
-                            "업로드 실패",
-                            Toast.LENGTH_SHORT
-                    ).show();
-
+                    Toast.makeText(getContext(), "업로드 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     return null;
                 }
         );
     }
-
     private void bindHeaderMyPageButton(View rootView) {
         if (!(rootView instanceof LinearLayout)) return;
     }
