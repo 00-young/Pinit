@@ -25,6 +25,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".activity.MainActivity" android:exported="false" />
+        <activity android:name=".activity.SurveyActivity" android:exported="false" />
 
         <activity android:name=".activity.PostTravelSettingActivity" android:exported="false" />
         <activity android:name=".activity.PostSearchActivity" android:exported="false" />
