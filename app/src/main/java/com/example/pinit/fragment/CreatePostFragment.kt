@@ -92,6 +92,9 @@ class CreatePostFragment : Fragment() {
 
     private var thumbnailUri: Uri? = null
 
+    // 마지막으로 포커스된 본문 텍스트 블록 (이 블록 뒤에 이미지/일정을 삽입)
+    private var lastFocusedBlock: View? = null
+
     // 업로드 진행 중 여부 (중복 업로드 방지 + 버튼 비활성화)
     private var isUploading = false
 
@@ -133,13 +136,11 @@ class CreatePostFragment : Fragment() {
             }
         }
 
-        // 내 일정 불러오기 -> DAY 를 map + place 블록들로 펼침
+        // 내 일정 불러오기 -> DAY 를 map + place 블록들로 펼침 (기존 글 유지, 커서 위치에 삽입)
         parentFragmentManager.setFragmentResultListener("planResult", this) { _, bundle ->
             val selectedPlan = getSerializableCompat(bundle, "selectedPlan", MyPlan::class.java)
             if (selectedPlan != null && layoutDynamicContent != null) {
-                layoutDynamicContent!!.removeAllViews()
                 selectedPlan.schedules?.forEach { expandDayIntoBlocks(it) }
-                addTextBlock()
             }
         }
 
@@ -198,19 +199,19 @@ class CreatePostFragment : Fragment() {
             setImageURI(imageUri)
             tag = editor
         }
-        container.addView(iv)
+        // 커서(마지막 포커스 블록) 다음에 삽입
+        addBlockAtCursor(iv)
 
         // 첫 이미지를 대표 이미지(썸네일)로 지정.
-        // 이미지는 위 본문 블록(iv)에만 표시하고, ivSelectedPhoto 에는 중복 표시하지 않는다.
         if (thumbnailUri == null) {
             thumbnailUri = imageUri
         }
-        addTextBlock()
+        // 이미지 바로 뒤에 이어 쓸 텍스트 블록
+        addCommentBlockAtCursor("내용을 입력하세요")
     }
 
     /** 단독 place 블록 (장소 검색으로 직접 추가) */
     private fun insertPlaceBlock(placeName: String, placeAddress: String?) {
-        val container = layoutDynamicContent ?: return
         val editor = EditorBlock(
             id = UUID.randomUUID().toString(),
             type = ContentBlock.TYPE_PLACE,
@@ -218,14 +219,12 @@ class CreatePostFragment : Fragment() {
             placeAddress = placeAddress ?: ""
         )
         val placeView = buildPlaceHeaderView(placeName, placeAddress, editor)
-        container.addView(placeView)
-        addCommentBlock("이 장소에 대한 이야기를 적어보세요...")
+        addBlockAtCursor(placeView)
+        addCommentBlockAtCursor("이 장소에 대한 이야기를 적어보세요...")
     }
 
-    /** DAY 하나를 map 블록 + place 블록들로 펼침 */
+    /** DAY 하나를 map 블록 + place 블록들로 펼침 (커서 위치에 차례로 삽입) */
     private fun expandDayIntoBlocks(day: DailySchedule) {
-        val container = layoutDynamicContent ?: return
-
         // 1) map 블록: 지도 + 요약리스트 + 날짜 (담기용 데이터가 여기 모두 모임)
         insertMapBlock(day)
 
@@ -237,8 +236,8 @@ class CreatePostFragment : Fragment() {
                 placeName = placeName
             )
             val placeView = buildPlaceHeaderView(placeName, null, editor)
-            container.addView(placeView)
-            addCommentBlock("${index + 1}. $placeName 에 대한 이야기를 적어보세요...")
+            addBlockAtCursor(placeView)
+            addCommentBlockAtCursor("${index + 1}. $placeName 에 대한 이야기를 적어보세요...")
         }
     }
 
@@ -298,7 +297,7 @@ class CreatePostFragment : Fragment() {
         }
 
         mapBlockView.tag = editor
-        container.addView(mapBlockView)
+        addBlockAtCursor(mapBlockView)
     }
 
     /** place 헤더 뷰 (핀 아이콘 + 장소명 + 주소) */
@@ -325,6 +324,15 @@ class CreatePostFragment : Fragment() {
 
     /** 다른 블록 사이의 코멘트(텍스트) 블록 */
     private fun addCommentBlock(hint: String) {
+        addCommentBlockInternal(hint, atCursor = false)
+    }
+
+    /** 코멘트 블록을 커서(마지막 포커스 블록) 다음에 삽입 */
+    private fun addCommentBlockAtCursor(hint: String) {
+        addCommentBlockInternal(hint, atCursor = true)
+    }
+
+    private fun addCommentBlockInternal(hint: String, atCursor: Boolean) {
         val container = layoutDynamicContent ?: return
         val editor = EditorBlock(id = UUID.randomUUID().toString(), type = ContentBlock.TYPE_TEXT)
         val et = EditText(context).apply {
@@ -337,8 +345,9 @@ class CreatePostFragment : Fragment() {
             gravity = Gravity.TOP
             minLines = 2
             tag = editor
+            setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
         }
-        container.addView(et)
+        if (atCursor) addBlockAtCursor(et) else container.addView(et)
     }
 
     // =====================================================
@@ -789,11 +798,37 @@ class CreatePostFragment : Fragment() {
             setBackgroundColor(Color.TRANSPARENT)
             minLines = 3
             tag = editor
+            // 이 블록에 포커스가 가면 삽입 기준 위치로 기억
+            setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
         }
         container.addView(editText)
     }
 
     private fun dp(value: Int): Int = Math.round(value * resources.displayMetrics.density)
+
+    /**
+     * 본문에 블록을 삽입할 위치(인덱스)를 반환한다.
+     * - 마지막으로 포커스된 블록이 있으면 그 "다음" 위치
+     * - 없으면 맨 끝
+     */
+    private fun insertIndex(): Int {
+        val container = layoutDynamicContent ?: return 0
+        val focused = lastFocusedBlock
+        if (focused != null) {
+            val idx = container.indexOfChild(focused)
+            if (idx >= 0) return idx + 1
+        }
+        return container.childCount
+    }
+
+    /** 본문 컨테이너의 지정 위치에 뷰를 삽입 (포커스 블록 다음). 삽입 후 위치를 한 칸 밀어준다. */
+    private fun addBlockAtCursor(viewToAdd: View) {
+        val container = layoutDynamicContent ?: return
+        val index = insertIndex()
+        container.addView(viewToAdd, index)
+        // 다음 삽입이 방금 넣은 블록 뒤로 이어지도록 기준 갱신
+        lastFocusedBlock = viewToAdd
+    }
 
     /**
      * 업로드 상태 전환.
@@ -875,5 +910,6 @@ class CreatePostFragment : Fragment() {
             bundle.getSerializable(key) as? T
         }
     }
+
 
 }
