@@ -14,7 +14,10 @@ import androidx.appcompat.widget.Toolbar;
 
 import com.example.pinit.R;
 import com.example.pinit.database.DatabaseHelper;
+import com.example.pinit.database.FirestoreRepository;
 import com.example.pinit.model.Budget;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 import java.util.Calendar;
 import java.util.Locale;
@@ -92,8 +95,44 @@ public class AddBudgetActivity extends AppCompatActivity {
         b.setDate(etDate.getText().toString());
         b.setType(rgType.getCheckedRadioButtonId() == R.id.rbIncome ? "income" : "expense");
         b.setMemo(etMemo.getText().toString());
-        dbHelper.insertBudget(b);
-        Toast.makeText(this, "저장되었습니다.", Toast.LENGTH_SHORT).show();
+        long insertedId =
+                dbHelper.insertBudget(b);
+
+        // =========================
+        // Firestore 업로드
+        // =========================
+
+        FirestoreRepository repository =
+                new FirestoreRepository();
+
+        FirebaseUser user =
+                FirebaseAuth.getInstance()
+                        .getCurrentUser();
+
+        if (user != null) {
+
+            String userId = user.getUid();
+
+            String budgetId =
+                    userId + "_" + insertedId;
+
+            repository.uploadBudget(
+                    budgetId,
+                    b.getTripId(),
+                    b.getTitle(),
+                    b.getAmount(),
+                    b.getCategory(),
+                    b.getDate(),
+                    b.getType(),
+                    b.getMemo()
+            );
+
+        }
+
+        Toast.makeText(this,
+                "저장되었습니다.",
+                Toast.LENGTH_SHORT).show();
+
         setResult(RESULT_OK);
         finish();
     }
