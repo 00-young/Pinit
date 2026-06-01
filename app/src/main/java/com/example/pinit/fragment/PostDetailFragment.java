@@ -100,12 +100,6 @@ public class PostDetailFragment extends Fragment {
                         .addToBackStack(null)
                         .commit());
 
-        view.findViewById(R.id.authorProfileRow).setOnClickListener(v ->
-                getParentFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance("\uD138\uD138\uD55C \uBCF5\uC22D\uC544"))
-                        .addToBackStack(null)
-                        .commit());
-
         // [핵심] 서버에서 데이터를 불러오는(척하는) 더미 데이터 세팅 함수 호출
         // (버튼 클릭보다 먼저 데이터가 세팅되어 있어야 합니다)
         db = FirebaseFirestore.getInstance();
@@ -324,6 +318,22 @@ public class PostDetailFragment extends Fragment {
 
         tvPostTitle.setText(post.getTitle());
         tvAuthorName.setText(post.getUserNickname());
+
+        // 작성자 클릭 시 상대방 마이페이지로 이동 (실제 데이터 연동)
+        View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
+        if (authorRow != null) {
+            authorRow.setOnClickListener(v -> {
+                // Post 객체에 작성자 이메일 정보가 있다고 가정 (userId 필드가 이메일인 경우)
+                // 만약 userId가 UID라면 OtherMyPageFragment에서 UID 지원 로직이 필요함.
+                // 현재 스키마상 userId는 UID이므로, UID를 기반으로 이동하도록 연동.
+                // OtherMyPageFragment.newInstanceWithEmail()가 이메일을 받으므로 UID로 이메일을 먼저 찾거나
+                // 스키마 설계를 맞춰야 함. 여기서는 기존 OtherMyPageFragment가 닉네임 또는 이메일을 받는 방식을 활용.
+                getParentFragmentManager().beginTransaction()
+                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(post.getUserId()))
+                        .addToBackStack(null)
+                        .commit();
+            });
+        }
 
         if (post.getCreatedAt() != null) {
             String formattedDate =
