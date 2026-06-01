@@ -53,11 +53,11 @@ public class LoginActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
         // TODO: 로그인 테스트용 자동 로그인 기능 정지(항상 로그인 화면으로 가게), 나중에 주석 처리만 없애면 됨
-       /* FirebaseUser currentUser = mAuth.getCurrentUser();
+       FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser != null) {
             goToMain();
         }
-        */
+
     }
 
     // 이메일/비밀번호로 Firebase 로그인 시도
