@@ -65,6 +65,44 @@ public class FirestoreRepository {
                 });
     }
 
+    public void uploadBudget(
+            String budgetId,
+            long tripId,
+            String title,
+            double amount,
+            String category,
+            String date,
+            String type,
+            String memo
+    ) {
+
+        Map<String, Object> budget = new HashMap<>();
+
+        budget.put("id", budgetId);
+        budget.put("trip_id", tripId);
+
+        budget.put("title", title);
+        budget.put("amount", amount);
+        budget.put("category", category);
+        budget.put("date", date);
+        budget.put("type", type);
+        budget.put("memo", memo);
+
+        db.collection("budgets")
+                .document(budgetId)
+                .set(budget)
+                .addOnSuccessListener(unused -> {
+                    Log.d(TAG,
+                            "Budget 업로드 성공");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG,
+                            "Budget 업로드 실패", e);
+                });
+
+    }
+
+
     public void uploadDay(
             String scheduleId,
             String dayId,
