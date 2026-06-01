@@ -8,31 +8,31 @@ class SearchRepository {
     private val db = FirebaseFirestore.getInstance()
 
     fun getSearchPosts(onResult: (List<SearchIndex>) -> Unit) {
-        db.collection("posts")
+        // 1. '검색 전용 컬렉션(목차)'으로 연결
+        db.collection("searchIndexPosts")
             .get()
             .addOnSuccessListener { result ->
                 val list = result.documents.map { doc ->
                     SearchIndex(
-                        postId = doc.id,
+                        postId = doc.id, //  문서 고유 ID 매핑 (상세 페이지 이동 시 필수)
                         title = doc.getString("title") ?: "",
                         content = doc.getString("content") ?: "",
                         mainTheme = doc.getString("mainTheme") ?: "",
                         hashtags = (doc.get("hashtags") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                         country = doc.getString("country") ?: "",
                         city = doc.getString("city") ?: "",
-                        // 💡 파이어베이스에서 실수로 글자/숫자가 잘못 들어가도 앱이 안 튕기게 방어!
                         travelerCount = try { doc.getLong("travelerCount") ?: 0L } catch (e: Exception) { 0L },
                         startDate = doc.getString("startDate") ?: "",
                         endDate = doc.getString("endDate") ?: "",
                         postImageUrl = doc.getString("postImageUrl") ?: "",
-                        // 💡 핵심 수정: 검색 필터에서 안 쓰는 시간 데이터 때문에 앱이 튕기지 않도록 0으로 고정!
-                        createdAt = 0L
+                        // 2. 목차에는 시간이 숫자로 잘 저장되어 있으므로 다시 읽어오도록 복구
+                        createdAt = try { doc.getLong("createdAt") ?: 0L } catch (e: Exception) { 0L }
                     )
                 }
                 onResult(list)
             }
             .addOnFailureListener { e ->
-                android.util.Log.e("SearchTest", "검색 데이터 불러오기 실패", e)
+                Log.e("SearchTest", "검색 데이터 불러오기 실패", e)
                 onResult(emptyList())
             }
     }
@@ -133,5 +133,3 @@ class SearchRepository {
                 postEndDate >= filterStartDate
     }
 }
-
-// 검색 기능
