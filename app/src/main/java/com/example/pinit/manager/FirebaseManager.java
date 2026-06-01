@@ -34,6 +34,30 @@ public class FirebaseManager {
         void onResult(boolean isFollowing);
     }
 
+    public interface OnUserLoadedListener {
+        void onUserLoaded(User user);
+        void onFailure(Exception e);
+    }
+
+    /**
+     * 특정 이메일을 가진 유저의 정보를 가져옵니다.
+     */
+    public void getUserData(String email, OnUserLoadedListener listener) {
+        db.collection("users").document(email)
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        User user = documentSnapshot.toObject(User.class);
+                        if (listener != null) listener.onUserLoaded(user);
+                    } else {
+                        if (listener != null) listener.onFailure(new Exception("User not found"));
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    if (listener != null) listener.onFailure(e);
+                });
+    }
+
     /**
      * 회원가입 시 FCM 토큰을 함께 안전하게 저장합니다. (실패해도 빈 값으로 가입 처리 진행)
      */

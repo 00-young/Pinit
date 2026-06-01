@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.pinit.R;
 import com.example.pinit.manager.FirebaseManager;
 import com.example.pinit.model.User;
+import com.example.pinit.model.post.Post;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -27,7 +28,6 @@ import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class OtherMyPageFragment extends Fragment {
@@ -42,6 +42,7 @@ public class OtherMyPageFragment extends Fragment {
     private TextView profileName;
     private TextView profileBio;
     private ImageView profileAvatar;
+    private OtherPostAdapter otherPostAdapter;
     
     private String userEmail;
     private String userName;
@@ -95,8 +96,10 @@ public class OtherMyPageFragment extends Fragment {
 
         RecyclerView recyclerView = view.findViewById(R.id.myPostRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        // 임시 더미 포스트
-        recyclerView.setAdapter(new OtherPostAdapter(createDummyPosts(userName != null ? userName : "User")));
+        
+        // 실제 데이터 연동을 위해 어댑터 초기화 및 연결
+        otherPostAdapter = new OtherPostAdapter(new ArrayList<>());
+        recyclerView.setAdapter(otherPostAdapter);
 
         // 내비게이션 비활성화: 상대방의 팔로워/팔로잉 목록은 볼 수 없게 하고 숫자만 표시
         view.findViewById(R.id.btnFollowers).setOnClickListener(null);
@@ -146,6 +149,9 @@ public class OtherMyPageFragment extends Fragment {
         followerCount.setText(String.valueOf(targetUser.getFollowerCount()));
         followingCount.setText(String.valueOf(targetUser.getFollowingCount()));
         
+        // 상대방이 쓴 실제 게시물 로드 시작
+        loadOtherUserPosts(targetUser.getEmail());
+        
         // 프로필 이미지 로드 (Glide 등이 없으므로 Placeholder 또는 URI 처리)
         if (targetUser.getProfileImageUrl() != null && !targetUser.getProfileImageUrl().isEmpty()) {
             try {
@@ -188,30 +194,52 @@ public class OtherMyPageFragment extends Fragment {
         });
     }
 
+    /**
+     * 상대방이 쓴 게시물 로드
+     */
+    private void loadOtherUserPosts(String otherId) {
+        if (otherId == null || otherId.isEmpty()) return;
+        
+        FirebaseFirestore.getInstance().collection("posts")
+                .whereEqualTo("userId", otherId) // 식별자 기반 쿼리
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<Post> postsList = new ArrayList<>();
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        postsList.add(doc.toObject(Post.class));
+                    }
+                    
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (otherPostAdapter != null) {
+                                otherPostAdapter.updatePosts(postsList);
+                            }
+                        });
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    android.util.Log.e("OtherMyPage", "게시물 로드 실패", e);
+                });
+    }
+
     @Override
     public void onDestroyView() {
         super.onDestroyView();
         if (userListener != null) userListener.remove();
     }
 
-    private List<OtherPost> createDummyPosts(String userName) {
-        List<OtherPost> posts = new ArrayList<>();
-        posts.add(new OtherPost(
-                userName,
-                "1박 2일 상하이 여행기",
-                "2026. 05. 20",
-                12,
-                5,
-                "#감성", "#우정 여행", "#1박 2일"
-        ));
-        return posts;
-    }
-
     private static class OtherPostAdapter extends RecyclerView.Adapter<OtherPostAdapter.ViewHolder> {
-        private final List<OtherPost> posts;
+        private final List<Post> posts;
 
-        OtherPostAdapter(List<OtherPost> posts) {
+        OtherPostAdapter(List<Post> posts) {
             this.posts = posts;
+        }
+        
+        void updatePosts(List<Post> newPosts) {
+            this.posts.clear();
+            this.posts.addAll(newPosts);
+            notifyDataSetChanged();
         }
 
         @NonNull
@@ -223,17 +251,23 @@ public class OtherMyPageFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            OtherPost post = posts.get(position);
-            holder.userName.setText(post.userName);
-            holder.postTitle.setText(post.title);
-            holder.tvPostDate.setText(post.date);
-            holder.tvCommentCount.setText(String.valueOf(post.commentCount));
-            holder.tvScrapCount.setText(String.valueOf(post.scrapCount));
+            Post post = posts.get(position);
+            holder.userName.setText(post.getUserNickname());
+            holder.postTitle.setText(post.getTitle());
+            
+            if (post.getCreatedAt() != null) {
+                String formattedDate = new java.text.SimpleDateFormat("yyyy. MM. dd", java.util.Locale.KOREA)
+                        .format(post.getCreatedAt().toDate());
+                holder.tvPostDate.setText(formattedDate);
+            }
+            
+            holder.tvCommentCount.setText(String.valueOf(post.getCommentCount()));
+            holder.tvScrapCount.setText(String.valueOf(post.getScrapCount()));
 
             holder.tagGroup.removeAllViews();
-            for (String tag : post.tags) {
+            for (String tag : post.getHashtags()) {
                 Chip chip = new Chip(holder.itemView.getContext());
-                chip.setText(tag);
+                chip.setText(tag.startsWith("#") ? tag : "#" + tag);
                 chip.setTextColor(Color.rgb(34, 34, 34));
                 chip.setTextSize(14);
                 chip.setChipBackgroundColor(ColorStateList.valueOf(Color.rgb(255, 248, 232)));
@@ -242,6 +276,15 @@ public class OtherMyPageFragment extends Fragment {
                 chip.setClickable(false);
                 holder.tagGroup.addView(chip);
             }
+            
+            holder.itemView.setOnClickListener(v -> {
+                androidx.appcompat.app.AppCompatActivity activity =
+                        (androidx.appcompat.app.AppCompatActivity) v.getContext();
+                activity.getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.fragmentContainer, PostDetailFragment.newInstance(post.getPostId()))
+                        .addToBackStack(null)
+                        .commit();
+            });
         }
 
         @Override
@@ -266,24 +309,6 @@ public class OtherMyPageFragment extends Fragment {
                 tvPostDate = itemView.findViewById(R.id.tvPostDate);
                 tagGroup = itemView.findViewById(R.id.postTagGroup);
             }
-        }
-    }
-
-    private static class OtherPost {
-        String userName;
-        String title;
-        String date;
-        int commentCount;
-        int scrapCount;
-        List<String> tags;
-
-        OtherPost(String userName, String title, String date, int commentCount, int scrapCount, String... tags) {
-            this.userName = userName;
-            this.title = title;
-            this.date = date;
-            this.commentCount = commentCount;
-            this.scrapCount = scrapCount;
-            this.tags = Arrays.asList(tags);
         }
     }
 }
