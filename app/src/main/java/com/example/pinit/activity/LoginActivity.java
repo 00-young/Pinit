@@ -1,6 +1,7 @@
 package com.example.pinit.activity;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -159,10 +160,17 @@ public class LoginActivity extends AppCompatActivity {
 
     // MainActivity로 이동 후 현재 Activity 종료 (백 스택에서 제거 → 뒤로가기로 복귀 불가)
     private void goToMain() {
-        // 로그인 성공 시 FCM 토큰 업데이트 수행
         FirebaseManager.getInstance().updateFcmToken();
 
-        startActivity(new Intent(this, MainActivity.class));
+        String email = mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getEmail() : "";
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        boolean surveyDone = prefs.getBoolean("survey_done_" + email, false);
+
+        if (!surveyDone) {
+            startActivity(new Intent(this, SurveyActivity.class));
+        } else {
+            startActivity(new Intent(this, MainActivity.class));
+        }
         finish();
     }
 
