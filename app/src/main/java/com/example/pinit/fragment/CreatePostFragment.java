@@ -21,6 +21,7 @@ import android.widget.RelativeLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.app.ProgressDialog;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -101,6 +102,7 @@ public class CreatePostFragment extends Fragment {
 
     // 대표 이미지 Uri
     private Uri thumbnailUri;
+    private ProgressDialog progressDialog; // 로딩 팝업용 변수 추가
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -463,6 +465,12 @@ public class CreatePostFragment extends Fragment {
             return;
         }
 
+        //  1. 여기서부터 로딩 시작 (버튼 연타 방지)
+        progressDialog = new ProgressDialog(getContext());
+        progressDialog.setMessage("게시물을 업로드하는 중입니다...\n잠시만 기다려주세요.");
+        progressDialog.setCancelable(false); // 로딩 중에 화면 바깥 터치 무시
+        progressDialog.show();
+
         // 에뮬레이터 테스트용 가짜 Uri 방어 코드 (이미지가 null일 때만 발동)
         if (thumbnailUri == null) {
             thumbnailUri = Uri.parse("android.resource://" + requireContext().getPackageName() + "/" + R.mipmap.ic_launcher);
@@ -473,13 +481,14 @@ public class CreatePostFragment extends Fragment {
                 : "";
 
         if (email.isEmpty()) {
+            if (progressDialog != null && progressDialog.isShowing()) progressDialog.dismiss();
             Toast.makeText(getContext(), "로그인이 필요합니다", Toast.LENGTH_SHORT).show();
             return;
         }
 
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
 
-        // 💡 실제 닉네임을 가져오기 위해 FirebaseManager 활용
+        // 실제 닉네임을 가져오기 위해 FirebaseManager 활용
         FirebaseManager.getInstance().getUserData(email, new FirebaseManager.OnUserLoadedListener() {
             @Override
             public void onUserLoaded(User user) {
@@ -495,7 +504,6 @@ public class CreatePostFragment extends Fragment {
             }
         });
     }
-
     private void executeUpload(String title, String uid, String nickname) {
         String postId = UUID.randomUUID().toString();
 
@@ -503,7 +511,7 @@ public class CreatePostFragment extends Fragment {
         Post post = new Post(
                 postId,
                 uid,
-                nickname, // 👈 "test" 대신 실제 닉네임 주입!
+                nickname,
                 title,
                 "image",
                 "",
@@ -513,7 +521,7 @@ public class CreatePostFragment extends Fragment {
                 Timestamp.now()
         );
 
-        // 💡 2. [핵심] 화면(layoutDynamicContent)에 추가된 뷰들을 돌면서 사용자가 쓴 글 싹 다 긁어모으기!
+        // 2. 화면(layoutDynamicContent)에 추가된 뷰들을 돌면서 사용자가 쓴 글 싹 다 긁어모으기
         List<ContentBlock> blocks = new ArrayList<>();
         int childCount = layoutDynamicContent.getChildCount();
         int sequence = 0;
@@ -527,8 +535,8 @@ public class CreatePostFragment extends Fragment {
                 if (!commentText.isEmpty()) {
                     ContentBlock textBlock = new ContentBlock(
                             UUID.randomUUID().toString(),
-                            "text",        // 블록 타입: 텍스트
-                            commentText,   // 사용자가 진짜 입력한 본문 내용!
+                            "text",
+                            commentText,
                             "",
                             null,
                             sequence++
@@ -536,9 +544,8 @@ public class CreatePostFragment extends Fragment {
                     blocks.add(textBlock);
                 }
             }
-            // 불러온 장소 카드뷰나 일괄 일정 블록인 경우 (필요시 장소명도 추출 가능)
+            // 불러온 장소 카드뷰나 일괄 일정 블록인 경우
             else if (child.getId() == R.id.tvInsertedPlaceName) {
-                // 여기에 장소 데이터 블록화하는 코드를 팀원 스펙에 맞춰 확장할 수 있습니다.
                 TextView tvPlaceName = child.findViewById(R.id.tvInsertedPlaceName);
                 if (tvPlaceName != null) {
                     ContentBlock placeBlock = new ContentBlock(
@@ -554,7 +561,7 @@ public class CreatePostFragment extends Fragment {
             }
         }
 
-        // 💡 만약 사용자가 아무 글도 안 썼다면 최소한 하나의 기본 블록이라도 넣어 처리
+        // 사용자가 아무 글도 안 썼다면 최소한 하나의 기본 블록이라도 넣어 처리
         if (blocks.isEmpty()) {
             blocks.add(new ContentBlock(UUID.randomUUID().toString(), "text", "등록된 본문 내용이 없습니다.", "", null, 0));
         }
@@ -563,8 +570,12 @@ public class CreatePostFragment extends Fragment {
         postRepository.uploadPost(
                 post,
                 thumbnailUri,
-                blocks, // 👈 하드코딩 대신 진짜 리스트 전달!
+                blocks,
                 () -> {
+                    //  2. 성공 시 로딩 다이얼로그 끄기
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        progressDialog.dismiss();
+                    }
                     Toast.makeText(getContext(), "업로드 성공!", Toast.LENGTH_SHORT).show();
                     if (getActivity() != null) {
                         requireActivity().getSupportFragmentManager().popBackStack();
@@ -572,6 +583,10 @@ public class CreatePostFragment extends Fragment {
                     return null;
                 },
                 e -> {
+                    //  3. 실패 시 로딩 다이얼로그 끄고 에러 메시지 띄우기
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        progressDialog.dismiss();
+                    }
                     Toast.makeText(getContext(), "업로드 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     return null;
                 }
@@ -606,7 +621,7 @@ public class CreatePostFragment extends Fragment {
         layoutTravelSettingTagsContainer.addView(tvTag);
     }
 
-    // 🌟 요구사항 1: 예산 합산 로직 함수
+    //  요구사항 1: 예산 합산 로직 함수
     private void calculateTotalBudget() {
         int food = parseBudgetNumber(etBudgetFood.getText().toString());
         int transport = parseBudgetNumber(etBudgetTransport.getText().toString());
