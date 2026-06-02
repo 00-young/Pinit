@@ -168,4 +168,26 @@ public class FirestoreRepository {
                             "Item 업로드 실패", e);
                 });
     }
+
+    public void deleteItem(
+            String scheduleId,
+            String dayId,
+            String itemId
+    ) {
+
+        db.collection("schedules")
+                .document(scheduleId)
+                .collection("days")
+                .document(dayId)
+                .collection("items")
+                .document(itemId)
+                .delete()
+                .addOnSuccessListener(unused -> {
+                    Log.d(TAG, "Item 삭제 성공");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Item 삭제 실패", e);
+                });
+    }
+
 }
