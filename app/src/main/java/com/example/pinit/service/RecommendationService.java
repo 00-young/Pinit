@@ -20,6 +20,8 @@ public class RecommendationService {
         String theme =
                 user.getTheme();
 
+        if (theme == null) return categories;
+
         if (theme.equals("자연/힐링")) {
 
             categories.add("park");
@@ -85,10 +87,13 @@ public class RecommendationService {
 
         // 테마 점수
 
-        String theme =
-                user.getTheme();
+        String theme = user.getTheme();
+        String companion = user.getCompanion();
+        String ageGroup = user.getAgeGroup();
+        String budget = user.getBudgetType();
+        if (types == null) types = "";
 
-        if (theme.equals("자연/힐링")) {
+        if (theme != null && theme.equals("자연/힐링")) {
 
             if (types.contains("park")) {
 
@@ -189,7 +194,6 @@ public class RecommendationService {
         }
 
         //동행자 점수
-        String companion = user.getCompanion();
 
         if ("연인".equals(companion)) {
 
@@ -272,7 +276,6 @@ public class RecommendationService {
         }
 
         //연령대 점수
-        String ageGroup = user.getAgeGroup();
 
         if ("10대".equals(ageGroup)) {
 
@@ -351,9 +354,6 @@ public class RecommendationService {
 
         // 예산 점수
 
-        String budget =
-                user.getBudgetType();
-
         int priceLevel = 0;
 
         try {
@@ -370,7 +370,7 @@ public class RecommendationService {
             priceLevel = 0;
         }
 
-        if (budget.equals("1만원 이하")) {
+        if ("1만원 이하".equals(budget)) {
 
             if (priceLevel <= 1) {
 
@@ -379,7 +379,7 @@ public class RecommendationService {
             }
         }
 
-        else if (budget.equals("1~3만원")) {
+        else if ("1-3만원".equals(budget)) {
 
             if (priceLevel <= 2) {
 
@@ -388,7 +388,7 @@ public class RecommendationService {
             }
         }
 
-        else if (budget.equals("3~5만원")) {
+        else if ("3-5만원".equals(budget)) {
 
             if (priceLevel == 2
                     || priceLevel == 3) {
@@ -398,7 +398,7 @@ public class RecommendationService {
             }
         }
 
-        else if (budget.equals("5~10만원")) {
+        else if ("5-10만원".equals(budget)) {
 
             if (priceLevel >= 3) {
 
@@ -407,7 +407,7 @@ public class RecommendationService {
             }
         }
 
-        else if (budget.equals("10만원 이상")) {
+        else if ("10만원 이상".equals(budget)) {
 
             if (priceLevel == 4) {
 

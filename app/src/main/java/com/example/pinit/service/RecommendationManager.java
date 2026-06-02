@@ -232,9 +232,9 @@ public class RecommendationManager {
 
                                         place.get("types"),
 
-                                        Double.parseDouble(place.get("lat")),
+                                        place.get("lat") != null ? Double.parseDouble(place.get("lat")) : 0,
 
-                                        Double.parseDouble(place.get("lng")),
+                                        place.get("lng") != null ? Double.parseDouble(place.get("lng")) : 0,
 
                                         finalRating,
 
@@ -294,9 +294,9 @@ public class RecommendationManager {
 
                                         place.get("types"),
 
-                                        Double.parseDouble(place.get("lat")),
+                                        place.get("lat") != null ? Double.parseDouble(place.get("lat")) : 0,
 
-                                        Double.parseDouble(place.get("lng")),
+                                        place.get("lng") != null ? Double.parseDouble(place.get("lng")) : 0,
 
                                         finalRating,
 
