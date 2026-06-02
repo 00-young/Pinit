@@ -1,7 +1,7 @@
 package com.example.pinit.fragment;
 
-import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,15 +15,23 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
-import com.example.pinit.data.MyScrap;
+import com.example.pinit.model.post.Post;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FieldPath;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MyScrapFragment extends Fragment {
+
+    private ScrapPostAdapter adapter;
+    private TextView emptyScrapText;
+    private RecyclerView recyclerView;
 
     @Nullable
     @Override
@@ -32,38 +40,95 @@ public class MyScrapFragment extends Fragment {
 
         view.findViewById(R.id.btnBack).setOnClickListener(v -> getParentFragmentManager().popBackStack());
 
-        RecyclerView recyclerView = view.findViewById(R.id.scrapRecyclerView);
-        TextView emptyScrapText = view.findViewById(R.id.emptyScrapText);
-        List<ScrapPost> posts = createScrapedPosts();
+        recyclerView = view.findViewById(R.id.scrapRecyclerView);
+        emptyScrapText = view.findViewById(R.id.emptyScrapText);
 
+        adapter = new ScrapPostAdapter(new ArrayList<>());
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        recyclerView.setAdapter(new ScrapPostAdapter(posts));
-        emptyScrapText.setVisibility(posts.isEmpty() ? View.VISIBLE : View.GONE);
-        recyclerView.setVisibility(posts.isEmpty() ? View.GONE : View.VISIBLE);
+        recyclerView.setAdapter(adapter);
+
+        loadScrappedPosts();
 
         return view;
     }
+    private void loadScrappedPosts() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        String currentUid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
 
-    private List<ScrapPost> createScrapedPosts() {
-        List<ScrapPost> posts = new ArrayList<>();
-        if (MyScrap.isScraped(requireContext(), MyScrap.POST_ID_SHANGHAI)) {
-            posts.add(new ScrapPost(
-                    "\uD138\uD138\uD55C \uBCF5\uC22D\uC544",
-                    "1\uBC15 2\uC77C \uC0C1\uD558\uC774 \uC5EC\uD589\uAE30",
-                    "2026. 05. 20",
-                    12,
-                    5,
-                    "#\uAC10\uC131", "#\uC6B0\uC815 \uC5EC\uD589", "#1\uBC15 2\uC77C"
-            ));
+        db.collectionGroup("scrap")
+                .whereEqualTo("userId", currentUid) // 👈 안전한 필드 기반 쿼리 (크래시 해결 핵심)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<String> postIds = new ArrayList<>();
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        // scrap 문서의 상위 게시글 ID 추출 (posts/{postId}/scrap/{UID})
+                        // getParent()는 'scrap' 컬렉션, 그 부모의 getParent()는 특정 post 문서를 가리킴
+                        if (doc.getReference().getParent() != null && doc.getReference().getParent().getParent() != null) {
+                            String postId = doc.getReference().getParent().getParent().getId();
+                            postIds.add(postId);
+                        }
+                    }
+
+                    if (postIds.isEmpty()) {
+                        updateUI(new ArrayList<>());
+                        return;
+                    }
+
+                    fetchPostsByIds(postIds);
+                })
+                .addOnFailureListener(e -> {
+                    android.util.Log.e("MyScrapFragment", "스크랩 목록 로드 실패", e);
+                    updateUI(new ArrayList<>());
+                });
+    }
+
+    private void fetchPostsByIds(List<String> postIds) {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        List<Post> postList = new ArrayList<>();
+        AtomicInteger count = new AtomicInteger(postIds.size());
+
+        for (String id : postIds) {
+            db.collection("posts").document(id).get()
+                    .addOnSuccessListener(documentSnapshot -> {
+                        if (documentSnapshot.exists()) {
+                            Post post = documentSnapshot.toObject(Post.class);
+                            if (post != null) postList.add(post);
+                        }
+                        if (count.decrementAndGet() == 0) {
+                            if (getActivity() != null) {
+                                getActivity().runOnUiThread(() -> updateUI(postList));
+                            }
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        if (count.decrementAndGet() == 0) {
+                            if (getActivity() != null) {
+                                getActivity().runOnUiThread(() -> updateUI(postList));
+                            }
+                        }
+                    });
         }
-        return posts;
+    }
+
+    private void updateUI(List<Post> posts) {
+        if (!isAdded()) return;
+        adapter.updatePosts(posts);
+        emptyScrapText.setVisibility(posts.isEmpty() ? View.VISIBLE : View.GONE);
+        recyclerView.setVisibility(posts.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private static class ScrapPostAdapter extends RecyclerView.Adapter<ScrapPostAdapter.ViewHolder> {
-        private final List<ScrapPost> posts;
+        private final List<Post> posts = new ArrayList<>();
 
-        ScrapPostAdapter(List<ScrapPost> posts) {
-            this.posts = posts;
+        ScrapPostAdapter(List<Post> posts) {
+            updatePosts(posts);
+        }
+
+        void updatePosts(List<Post> newPosts) {
+            posts.clear();
+            posts.addAll(newPosts);
+            notifyDataSetChanged();
         }
 
         @NonNull
@@ -75,17 +140,23 @@ public class MyScrapFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            ScrapPost post = posts.get(position);
-            holder.userName.setText(post.userName);
-            holder.postTitle.setText(post.title);
-            holder.tvPostDate.setText(post.date);
-            holder.tvCommentCount.setText(String.valueOf(post.commentCount));
-            holder.tvScrapCount.setText(String.valueOf(post.scrapCount));
+            Post post = posts.get(position);
+            holder.userName.setText(post.getUserNickname());
+            holder.postTitle.setText(post.getTitle());
+
+            if (post.getCreatedAt() != null) {
+                String formattedDate = new java.text.SimpleDateFormat("yyyy. MM. dd", java.util.Locale.KOREA)
+                        .format(post.getCreatedAt().toDate());
+                holder.tvPostDate.setText(formattedDate);
+            }
+
+            holder.tvCommentCount.setText(String.valueOf(post.getCommentCount()));
+            holder.tvScrapCount.setText(String.valueOf(post.getScrapCount()));
 
             holder.tagGroup.removeAllViews();
-            for (String tag : post.tags) {
+            for (String tag : post.getHashtags()) {
                 Chip chip = new Chip(holder.itemView.getContext());
-                chip.setText(tag);
+                chip.setText(tag.startsWith("#") ? tag : "#" + tag);
                 chip.setTextColor(Color.rgb(34, 34, 34));
                 chip.setTextSize(14);
                 chip.setChipBackgroundColor(ColorStateList.valueOf(Color.rgb(255, 248, 232)));
@@ -99,7 +170,7 @@ public class MyScrapFragment extends Fragment {
                 androidx.appcompat.app.AppCompatActivity activity =
                         (androidx.appcompat.app.AppCompatActivity) v.getContext();
                 activity.getSupportFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, new PostDetailFragment())
+                        .replace(R.id.fragmentContainer, PostDetailFragment.newInstance(post.getPostId()))
                         .addToBackStack(null)
                         .commit();
             });
@@ -127,24 +198,6 @@ public class MyScrapFragment extends Fragment {
                 tvPostDate = itemView.findViewById(R.id.tvPostDate);
                 tagGroup = itemView.findViewById(R.id.postTagGroup);
             }
-        }
-    }
-
-    private static class ScrapPost {
-        String userName;
-        String title;
-        String date;
-        int commentCount;
-        int scrapCount;
-        List<String> tags;
-
-        ScrapPost(String userName, String title, String date, int commentCount, int scrapCount, String... tags) {
-            this.userName = userName;
-            this.title = title;
-            this.date = date;
-            this.commentCount = commentCount;
-            this.scrapCount = scrapCount;
-            this.tags = Arrays.asList(tags);
         }
     }
 }
