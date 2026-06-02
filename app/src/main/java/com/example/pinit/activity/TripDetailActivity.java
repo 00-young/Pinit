@@ -53,6 +53,7 @@ import okhttp3.Response;
 public class TripDetailActivity extends AppCompatActivity implements OnMapReadyCallback {
 
     private static final int REQUEST_ADD_SCHEDULE = 100;
+    private static final int REQUEST_EDIT_SCHEDULE = 101;
 
     private DatabaseHelper dbHelper;
     private int tripId;
@@ -118,9 +119,16 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
                     loadSchedulesForDate(selectedDate);
                 },
 
-                // 수정 기능 (임시)
+                // 수정
                 schedule -> {
-                    // TODO: 일정 수정 기능 연결 예정
+                    Intent intent = new Intent(this, AddScheduleActivity.class);
+                    intent.putExtra("schedule_id", schedule.getId());
+                    intent.putExtra("schedule_title", schedule.getTitle());
+                    intent.putExtra("schedule_date", schedule.getDate());
+                    intent.putExtra("schedule_time", schedule.getTime());
+                    intent.putExtra("schedule_place", schedule.getPlaceName());
+                    intent.putExtra("schedule_memo", schedule.getMemo());
+                    startActivityForResult(intent, REQUEST_EDIT_SCHEDULE);
                 }
         );
         rvSchedule.setAdapter(scheduleAdapter);
@@ -571,7 +579,8 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_ADD_SCHEDULE && resultCode == RESULT_OK) {
+        if (resultCode == RESULT_OK &&
+                (requestCode == REQUEST_ADD_SCHEDULE || requestCode == REQUEST_EDIT_SCHEDULE)) {
             buildDateTabs();
             loadSchedulesForDate(selectedDate);
         }
