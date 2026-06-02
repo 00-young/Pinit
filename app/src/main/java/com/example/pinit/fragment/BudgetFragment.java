@@ -42,6 +42,7 @@ public class BudgetFragment extends Fragment {
     private TextView tvBudgetTotal, tvBudgetUsed, tvBudgetRemain, tvBudgetCount;
     private TextView tvCatFood, tvCatTransport, tvCatLodge, tvCatShopping, tvCatActivity, tvCatEtc;
     private List<Trip> tripList = new ArrayList<>();
+    private List<Budget> currentBudgets = new ArrayList<>();
     private int selectedTripId = -1;
 
     @Override
@@ -60,6 +61,13 @@ public class BudgetFragment extends Fragment {
         tvCatShopping = view.findViewById(R.id.tvCatShopping);
         tvCatActivity = view.findViewById(R.id.tvCatActivity);
         tvCatEtc = view.findViewById(R.id.tvCatEtc);
+
+        view.findViewById(R.id.cardFood).setOnClickListener(v -> showCategoryDetail("식비"));
+        view.findViewById(R.id.cardTransport).setOnClickListener(v -> showCategoryDetail("교통"));
+        view.findViewById(R.id.cardLodge).setOnClickListener(v -> showCategoryDetail("숙박"));
+        view.findViewById(R.id.cardShopping).setOnClickListener(v -> showCategoryDetail("쇼핑"));
+        view.findViewById(R.id.cardActivity).setOnClickListener(v -> showCategoryDetail("관광"));
+        view.findViewById(R.id.cardEtc).setOnClickListener(v -> showCategoryDetail("기타"));
 
         recyclerView = view.findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -157,6 +165,7 @@ public class BudgetFragment extends Fragment {
 
         NumberFormat fmt = NumberFormat.getNumberInstance(Locale.KOREA);
         List<Budget> budgets = dbHelper.getBudgetsByTrip(selectedTripId);
+        currentBudgets = budgets;
 
         double used = 0, food = 0, transport = 0, lodge = 0, shopping = 0, activity = 0, etc = 0;
         for (Budget b : budgets) {
@@ -193,5 +202,10 @@ public class BudgetFragment extends Fragment {
             loadBudgets();
         });
         recyclerView.setAdapter(adapter);
+    }
+
+    private void showCategoryDetail(String category) {
+        CategoryDetailBottomSheet.newInstance(category, currentBudgets)
+                .show(getChildFragmentManager(), "category_detail");
     }
 }
