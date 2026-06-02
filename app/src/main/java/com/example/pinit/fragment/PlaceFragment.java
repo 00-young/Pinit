@@ -37,19 +37,24 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.pinit.R;
 import com.example.pinit.activity.PlaceDetailActivity;
 import com.example.pinit.adapter.PlaceAdapter;
+import com.example.pinit.adapter.RecommendAdapter;
 import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.database.FirestoreRepository;
 import com.example.pinit.database.PlacesApiHelper;
+import com.example.pinit.model.RecommendedPlace;
 import com.example.pinit.model.Schedule;
 import com.example.pinit.model.Trip;
+import com.example.pinit.model.User;
+import com.example.pinit.service.RecommendationManager;
+import com.example.pinit.service.UserService;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 // [프래그먼트] BottomNavigation 장소 탭 (2번째 탭)
@@ -79,13 +84,21 @@ public class PlaceFragment extends Fragment {
     private final String[] sorts = {"별점순", "리뷰순", "맛집추천순"};
 
     private FusedLocationProviderClient fusedLocationClient;
-    private double currentLat = 0, currentLng = 0; // 현재 GPS 좌표
+    private double currentLat = 0, currentLng = 0;
     private static final int PERMISSION_REQUEST = 100;
     private TextView tvLocation;
 
     private LinearLayout panelSearch, panelNearby;
     private TextView tabSearch, tabNearby;
     private View rootView;
+
+    // 추천 섹션
+    private LinearLayout sectionRecommend;
+    private RecyclerView rvRecommend;
+    private ProgressBar progressRecommend;
+    private TextView tvRecommendSubtitle, tvRecommendEmpty;
+    private RecommendAdapter recommendAdapter;
+    private boolean isSearching = false;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -154,8 +167,123 @@ public class PlaceFragment extends Fragment {
         rootView.findViewById(R.id.btnAttraction).setOnClickListener(v -> searchNearby("tourist_attraction", "🏛️ 주변 관광지"));
         rootView.findViewById(R.id.btnHotel).setOnClickListener(v -> searchNearby("lodging", "🏨 주변 숙소"));
 
+        // 추천 섹션 초기화
+        sectionRecommend = rootView.findViewById(R.id.sectionRecommend);
+        rvRecommend = rootView.findViewById(R.id.rvRecommend);
+        progressRecommend = rootView.findViewById(R.id.progressRecommend);
+        tvRecommendSubtitle = rootView.findViewById(R.id.tvRecommendSubtitle);
+        tvRecommendEmpty = rootView.findViewById(R.id.tvRecommendEmpty);
+
+        rvRecommend.setLayoutManager(
+                new LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false));
+
         getCurrentLocation();
+        loadRecommendations();
         return rootView;
+    }
+
+    private void loadRecommendations() {
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth.getCurrentUser() == null) return;
+
+        sectionRecommend.setVisibility(View.VISIBLE);
+        progressRecommend.setVisibility(View.VISIBLE);
+        tvRecommendEmpty.setVisibility(View.GONE);
+        rvRecommend.setVisibility(View.GONE);
+
+        new UserService().getUser(new UserService.UserCallback() {
+            @Override
+            public void onSuccess(User user) {
+                if (!isAdded()) return;
+                if (user.getTheme() == null || user.getTheme().isEmpty()) {
+                    showRecommendEmpty("설문조사를 완료하면 맞춤 추천을 받을 수 있어요");
+                    return;
+                }
+
+                String uid = auth.getCurrentUser().getUid();
+                FirebaseFirestore.getInstance()
+                        .collection("schedules")
+                        .whereEqualTo("userId", uid)
+                        .limit(1)
+                        .get()
+                        .addOnSuccessListener(query -> {
+                            if (!isAdded()) return;
+                            if (query.isEmpty()) {
+                                showRecommendEmpty("여행 일정을 추가하면 맞춤 추천을 받을 수 있어요");
+                                return;
+                            }
+                            DocumentSnapshot doc = query.getDocuments().get(0);
+                            Double lat = doc.getDouble("latitude");
+                            Double lng = doc.getDouble("longitude");
+                            String city = doc.getString("city");
+
+                            if (lat == null || lng == null || lat == 0 && lng == 0) {
+                                showRecommendEmpty("일정에 장소를 추가하면 맞춤 추천을 받을 수 있어요");
+                                return;
+                            }
+
+                            if (city != null && !city.isEmpty()) {
+                                requireActivity().runOnUiThread(() ->
+                                        tvRecommendSubtitle.setText(city + " 기반"));
+                            }
+
+                            new RecommendationManager().getRecommendations(
+                                    user, lat, lng,
+                                    new RecommendationManager.RecommendationCallback() {
+                                        @Override
+                                        public void onSuccess(List<RecommendedPlace> places) {
+                                            if (!isAdded()) return;
+                                            requireActivity().runOnUiThread(() -> {
+                                                progressRecommend.setVisibility(View.GONE);
+                                                if (places.isEmpty()) {
+                                                    showRecommendEmpty("주변 추천 장소를 찾지 못했어요");
+                                                    return;
+                                                }
+                                                recommendAdapter = new RecommendAdapter(places, place -> {
+                                                    Map<String, String> placeMap = new java.util.HashMap<>();
+                                                    placeMap.put("place_id", place.getPlaceId() != null ? place.getPlaceId() : "");
+                                                    placeMap.put("name", place.getName() != null ? place.getName() : "");
+                                                    placeMap.put("address", place.getAddress() != null ? place.getAddress() : "");
+                                                    placeMap.put("rating", String.valueOf(place.getRating()));
+                                                    placeMap.put("lat", String.valueOf(place.getLatitude()));
+                                                    placeMap.put("lng", String.valueOf(place.getLongitude()));
+                                                    placeMap.put("types", place.getCategory() != null ? place.getCategory() : "");
+                                                    showPlaceOptions(placeMap);
+                                                });
+                                                rvRecommend.setAdapter(recommendAdapter);
+                                                rvRecommend.setVisibility(View.VISIBLE);
+                                            });
+                                        }
+
+                                        @Override
+                                        public void onFailure(String error) {
+                                            if (!isAdded()) return;
+                                            requireActivity().runOnUiThread(() ->
+                                                    showRecommendEmpty("추천을 불러오지 못했어요"));
+                                        }
+                                    });
+                        })
+                        .addOnFailureListener(e -> {
+                            if (!isAdded()) return;
+                            requireActivity().runOnUiThread(() ->
+                                    showRecommendEmpty("일정 정보를 불러오지 못했어요"));
+                        });
+            }
+
+            @Override
+            public void onFailure(String error) {
+                if (!isAdded()) return;
+                requireActivity().runOnUiThread(() ->
+                        sectionRecommend.setVisibility(View.GONE));
+            }
+        });
+    }
+
+    private void showRecommendEmpty(String message) {
+        progressRecommend.setVisibility(View.GONE);
+        rvRecommend.setVisibility(View.GONE);
+        tvRecommendEmpty.setText(message);
+        tvRecommendEmpty.setVisibility(View.VISIBLE);
     }
 
     // ========== 장소 옵션 팝업 (상세보기 / 일정 추가) ==========
@@ -510,6 +638,8 @@ public class PlaceFragment extends Fragment {
             Toast.makeText(requireContext(), "검색어를 입력해주세요.", Toast.LENGTH_SHORT).show();
             return;
         }
+        isSearching = true;
+        sectionRecommend.setVisibility(View.GONE);
         progressBar.setVisibility(View.VISIBLE);
 
         // 카테고리 선택 시 쿼리에 한국어 키워드 추가 (검색 정확도 향상)
