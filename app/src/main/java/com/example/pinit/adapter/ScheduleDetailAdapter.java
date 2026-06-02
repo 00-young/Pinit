@@ -59,21 +59,15 @@ public class  ScheduleDetailAdapter extends RecyclerView.Adapter<ScheduleDetailA
                 ? "📍 " + s.getPlaceName() : "");
 
         holder.tvOpenMap.setOnClickListener(v -> mapClickListener.onMapClick(s));
-
-        holder.itemView.setOnClickListener(v -> {
-            if (editListener != null) editListener.onEdit(s);
-        });
-        holder.itemView.setOnLongClickListener(v -> {
-            deleteListener.onDelete(s.getId());
-            return true;
-        });
+        holder.btnEdit.setOnClickListener(v -> { if (editListener != null) editListener.onEdit(s); });
+        holder.btnDelete.setOnClickListener(v -> deleteListener.onDelete(s.getId()));
     }
 
     @Override
     public int getItemCount() { return list.size(); }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView tvTime, tvTitle, tvPlace, tvOpenMap;
+        TextView tvTime, tvTitle, tvPlace, tvOpenMap, btnEdit, btnDelete;
 
         ViewHolder(View view) {
             super(view);
@@ -81,6 +75,8 @@ public class  ScheduleDetailAdapter extends RecyclerView.Adapter<ScheduleDetailA
             tvTitle = view.findViewById(R.id.tvTitle);
             tvPlace = view.findViewById(R.id.tvPlace);
             tvOpenMap = view.findViewById(R.id.tvOpenMap);
+            btnEdit = view.findViewById(R.id.btnEdit);
+            btnDelete = view.findViewById(R.id.btnDelete);
         }
     }
 }
