@@ -89,6 +89,27 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
     }
 
+    public void updateTrip(Trip t) {
+
+        SQLiteDatabase db = getWritableDatabase();
+
+        ContentValues v = new ContentValues();
+
+        v.put("title", t.getTitle());
+        v.put("start_date", t.getStartDate());
+        v.put("end_date", t.getEndDate());
+        v.put("budget", t.getBudget());
+
+        db.update(
+                "trips",
+                v,
+                "id=?",
+                new String[]{String.valueOf(t.getId())}
+        );
+
+        db.close();
+    }
+
     private Trip cursorToTrip(Cursor c) {
         Trip t = new Trip();
         t.setId(c.getInt(c.getColumnIndexOrThrow("id")));
