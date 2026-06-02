@@ -491,6 +491,8 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         s.setTripId(tripId);
         s.setTitle(title);
         s.setDate(selectedDate);
+        s.setLatitude(latLng.latitude);
+        s.setLongitude(latLng.longitude);
         s.setTime(time);
         s.setPlaceName(address.isEmpty()
                 ? String.format("%.5f, %.5f", latLng.latitude, latLng.longitude)
