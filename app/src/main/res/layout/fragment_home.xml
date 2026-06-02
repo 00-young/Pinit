@@ -2,6 +2,7 @@
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="#FFFFFF">
 
     <LinearLayout
@@ -54,18 +55,16 @@
                 android:textColor="#000000"
                 android:textSize="14sp" />
 
-            <TextView
+            <ImageView
                 android:id="@+id/btnOpenMyPage"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_marginStart="8dp"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="4dp"
                 android:clickable="true"
                 android:focusable="true"
-                android:gravity="center"
-                android:text="≡"
-                android:textColor="#000000"
-                android:textSize="20sp"
-                android:textStyle="bold" />
+                android:padding="4dp"
+                android:src="@drawable/ic_mypage"
+                app:tint="#000000" />
         </LinearLayout>
 
         <View
