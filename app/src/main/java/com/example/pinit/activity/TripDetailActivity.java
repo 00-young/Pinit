@@ -155,18 +155,12 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
                 // 수정 기능 (임시)
                 schedule -> {
-                    // TODO: 일정 수정 기능 연결 예정
+                    showEditTripDialog();
                 }
         );
         rvSchedule.setAdapter(scheduleAdapter);
 
         findViewById(R.id.btnAddSchedule).setOnClickListener(v -> openAddSchedule());
-        /*
-        findViewById(R.id.btnUploadFirestore)
-                .setOnClickListener(v -> {
-                    uploadScheduleToFirestore();
-                });
-         */
         findViewById(R.id.btnAddScheduleEmpty).setOnClickListener(v -> openAddSchedule());
 
         SupportMapFragment mapFragment = (SupportMapFragment)
@@ -174,6 +168,16 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         if (mapFragment != null) mapFragment.getMapAsync(this);
 
         loadTrip();
+
+        boolean openEdit =
+                getIntent().getBooleanExtra(
+                        "open_edit",
+                        false
+                );
+
+        if (openEdit) {
+            showEditTripDialog();
+        }
     }
 
     private void loadTrip() {
@@ -520,6 +524,107 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         intent.putExtra("trip_id", tripId);
         intent.putExtra("default_date", selectedDate);
         startActivityForResult(intent, REQUEST_ADD_SCHEDULE);
+    }
+
+    private void showEditTripDialog() {
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(48, 24, 48, 0);
+
+        EditText etTitle = new EditText(this);
+        etTitle.setHint("여행 이름");
+        etTitle.setText(trip.getTitle());
+        layout.addView(etTitle);
+
+        EditText etStartDate = new EditText(this);
+        etStartDate.setHint("시작일");
+        etStartDate.setText(trip.getStartDate());
+        layout.addView(etStartDate);
+
+        EditText etEndDate = new EditText(this);
+        etEndDate.setHint("종료일");
+        etEndDate.setText(trip.getEndDate());
+        layout.addView(etEndDate);
+
+        EditText etBudget = new EditText(this);
+        etBudget.setHint("총 예산");
+        etBudget.setText(String.valueOf(trip.getBudget()));
+        layout.addView(etBudget);
+
+        new AlertDialog.Builder(this)
+                .setTitle("여행 수정")
+                .setView(layout)
+
+                .setPositiveButton("저장", (dialog, which) -> {
+
+                    String title =
+                            etTitle.getText().toString().trim();
+
+                    String startDate =
+                            etStartDate.getText().toString().trim();
+
+                    String endDate =
+                            etEndDate.getText().toString().trim();
+
+                    double budget = 0;
+
+                    try {
+                        budget = Double.parseDouble(
+                                etBudget.getText().toString().trim()
+                        );
+                    } catch (Exception ignored) {}
+
+                    // =========================
+                    // SQLite 수정
+                    // =========================
+
+                    trip.setTitle(title);
+                    trip.setStartDate(startDate);
+                    trip.setEndDate(endDate);
+                    trip.setBudget(budget);
+
+                    dbHelper.updateTrip(trip);
+
+                    // =========================
+                    // Firestore 수정
+                    // =========================
+
+                    FirebaseUser user =
+                            FirebaseAuth.getInstance().getCurrentUser();
+
+                    if (user != null) {
+
+                        String scheduleId =
+                                user.getUid() + "_" + trip.getId();
+
+                        FirestoreRepository repository =
+                                new FirestoreRepository();
+
+                        repository.updateSchedule(
+                                scheduleId,
+                                title,
+                                startDate,
+                                endDate,
+                                budget
+                        );
+                    }
+
+                    // =========================
+                    // 화면 새로고침
+                    // =========================
+
+                    loadTrip();
+
+                    Toast.makeText(
+                            this,
+                            "여행 정보가 수정되었습니다.",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                })
+
+                .setNegativeButton("취소", null)
+                .show();
     }
 
     @Override

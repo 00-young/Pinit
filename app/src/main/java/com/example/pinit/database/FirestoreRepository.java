@@ -190,4 +190,30 @@ public class FirestoreRepository {
                 });
     }
 
+    public void updateSchedule(
+            String scheduleId,
+            String title,
+            String startDate,
+            String endDate,
+            double totalBudget
+    ) {
+
+        Map<String, Object> updates = new HashMap<>();
+
+        updates.put("title", title);
+        updates.put("startDate", startDate);
+        updates.put("endDate", endDate);
+        updates.put("totalBudget", totalBudget);
+
+        db.collection("schedules")
+                .document(scheduleId)
+                .update(updates)
+                .addOnSuccessListener(unused -> {
+                    Log.d(TAG, "Schedule 수정 성공");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Schedule 수정 실패", e);
+                });
+    }
+
 }
