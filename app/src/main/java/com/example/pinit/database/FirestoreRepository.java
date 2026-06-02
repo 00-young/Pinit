@@ -190,6 +190,63 @@ public class FirestoreRepository {
                 });
     }
 
+    public void deleteSchedule(String scheduleId) {
+
+        db.collection("schedules")
+                .document(scheduleId)
+                .collection("days")
+                .get()
+                .addOnSuccessListener(daySnapshots -> {
+
+                    for (com.google.firebase.firestore.QueryDocumentSnapshot dayDoc
+                            : daySnapshots) {
+
+                        String dayId = dayDoc.getId();
+
+                        // =========================
+                        // items 삭제
+                        // =========================
+
+                        db.collection("schedules")
+                                .document(scheduleId)
+                                .collection("days")
+                                .document(dayId)
+                                .collection("items")
+                                .get()
+                                .addOnSuccessListener(itemSnapshots -> {
+
+                                    for (com.google.firebase.firestore.QueryDocumentSnapshot itemDoc
+                                            : itemSnapshots) {
+
+                                        itemDoc.getReference().delete();
+                                    }
+
+                                    // =========================
+                                    // day 삭제
+                                    // =========================
+
+                                    dayDoc.getReference().delete();
+                                });
+                    }
+
+                    // =========================
+                    // 마지막에 schedule 삭제
+                    // =========================
+
+                    db.collection("schedules")
+                            .document(scheduleId)
+                            .delete()
+                            .addOnSuccessListener(unused -> {
+                                Log.d(TAG,
+                                        "Schedule 전체 삭제 성공");
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG,
+                                        "Schedule 전체 삭제 실패", e);
+                            });
+                });
+    }
+
     public void updateSchedule(
             String scheduleId,
             String title,

@@ -17,6 +17,9 @@ import com.example.pinit.activity.TripDetailActivity;
 import com.example.pinit.adapter.TripAdapter;
 import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.Trip;
+import com.example.pinit.database.FirestoreRepository;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 import java.util.List;
 
@@ -47,7 +50,35 @@ public class HomeFragment extends Fragment {
                             .setTitle("여행 삭제")
                             .setMessage("'" + trip.getTitle() + "' 여행을 삭제하시겠습니까?")
                             .setPositiveButton("삭제", (d, w) -> {
+
+                                // =========================
+                                // SQLite 삭제
+                                // =========================
+
                                 dbHelper.deleteTrip(trip.getId());
+
+                                // =========================
+                                // Firestore 삭제
+                                // =========================
+
+                                FirebaseUser user =
+                                        FirebaseAuth.getInstance()
+                                                .getCurrentUser();
+
+                                if (user != null) {
+
+                                    FirestoreRepository repository =
+                                            new FirestoreRepository();
+
+                                    String scheduleId =
+                                            user.getUid() + "_"
+                                                    + trip.getId();
+
+                                    repository.deleteSchedule(
+                                            scheduleId
+                                    );
+                                }
+
                                 loadData();
                             })
                             .setNegativeButton("취소", null).show();
