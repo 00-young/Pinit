@@ -27,11 +27,14 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.pinit.R;
 import com.example.pinit.data.MyFollow;
 import com.example.pinit.model.User;
+import com.example.pinit.model.post.Post;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
@@ -112,20 +115,48 @@ public class MyPageFragment extends Fragment {
                         .commit());
 
         view.findViewById(R.id.btnLogout).setOnClickListener(v -> {
+            // 1. Firebase 세션 로그아웃 실행
             mAuth.signOut();
-            androidx.appcompat.app.AppCompatActivity activity = (androidx.appcompat.app.AppCompatActivity) requireActivity();
-            activity.finish();
-            // Assuming LoginActivity will be started by the system or next restart
-        });
-
-        // TODO: 개발 완료 후 삭제 예정 (테스트용)
-        view.findViewById(R.id.btnTestUsers).setOnClickListener(v -> {
-            startActivity(new android.content.Intent(getContext(), com.example.pinit.activity.TestUserListActivity.class));
+            
+            // 2. 로그인 화면으로 이동 (백스택 제거)
+            android.content.Intent intent = new android.content.Intent(getActivity(), com.example.pinit.activity.LoginActivity.class);
+            intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
         });
 
         setupUserListener();
+        loadMyPosts();
 
         return view;
+    }
+
+    private void loadMyPosts() {
+        if (mAuth.getCurrentUser() == null) return;
+        String uid = mAuth.getCurrentUser().getUid();
+
+        // 'posts' 컬렉션에서 'userId' 필드가 내 UID와 일치하는 문서만 쿼리
+        db.collection("posts")
+                .whereEqualTo("userId", uid) 
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<Post> postsList = new ArrayList<>();
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        Post post = doc.toObject(Post.class);
+                        postsList.add(post);
+                    }
+                    
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (myPostAdapter != null) {
+                                myPostAdapter.updatePosts(postsList);
+                            }
+                        });
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    android.util.Log.e("MyPageFragment", "내 게시글 로드 실패", e);
+                });
     }
 
     private void setupUserListener() {
@@ -155,43 +186,6 @@ public class MyPageFragment extends Fragment {
         }
     }
 
-    private List<MyPost> createDummyPosts(String userName) {
-        List<MyPost> posts = new ArrayList<>();
-        posts.add(new MyPost(
-                userName,
-                "\uC544\uC774\uC640 \uD568\uAED8\uD55C \uC81C\uC8FC \uCE74\uD398 \uD22C\uC5B4",
-                "2026. 05. 22",
-                12,
-                5,
-                "#\uAC00\uC871", "#\uC81C\uC8FC", "#\uCE74\uD398"
-        ));
-        posts.add(new MyPost(
-                userName,
-                "1\uBC15 2\uC77C \uC0C1\uD558\uC774 \uC5EC\uD589\uAE30",
-                "2026. 05. 20",
-                8,
-                11,
-                "#\uC0C1\uD558\uC774", "#1\uBC152\uC77C", "#\uB3C4\uC2DC\uC5EC\uD589"
-        ));
-        posts.add(new MyPost(
-                userName,
-                "\uBD80\uBAA8\uB2D8\uACFC \uD568\uAED8\uD55C \uACBD\uC8FC \uC5EC\uD589",
-                "2026. 05. 14",
-                4,
-                3,
-                "#\uACBD\uC8FC", "#\uBD80\uBAA8\uB2D8", "#\uC5ED\uC0AC\uC5EC\uD589"
-        ));
-        posts.add(new MyPost(
-                userName,
-                "\uD63C\uC790 \uB2E4\uB140\uC628 \uBD80\uC0B0 \uB9DB\uC9D1 \uAE30\uB85D",
-                "2026. 05. 08",
-                6,
-                7,
-                "#\uBD80\uC0B0", "#\uB9DB\uC9D1", "#\uD63C\uC790\uC5EC\uD589"
-        ));
-        return posts;
-    }
-
     private void renderProfile() {
         if (currentUser == null) return;
 
@@ -210,9 +204,9 @@ public class MyPageFragment extends Fragment {
             }
         }
 
-        if (myPostAdapter != null) {
-            myPostAdapter.updatePosts(createDummyPosts(currentUser.getNickname()));
-        }
+        // 💡 프로필 갱신 시 포스트 목록도 최신 상태(닉네임 등)로 유지하고 싶다면 다시 로드 가능
+        // loadMyPosts(); 
+
         followerCount.setText(String.valueOf(currentUser.getFollowerCount()));
         followingCount.setText(String.valueOf(currentUser.getFollowingCount()));
     }
@@ -280,13 +274,13 @@ public class MyPageFragment extends Fragment {
     }
 
     private static class MyPostAdapter extends RecyclerView.Adapter<MyPostAdapter.ViewHolder> {
-        private final List<MyPost> posts = new ArrayList<>();
+        private final List<Post> posts = new ArrayList<>();
 
-        MyPostAdapter(List<MyPost> posts) {
+        MyPostAdapter(List<Post> posts) {
             updatePosts(posts);
         }
 
-        void updatePosts(List<MyPost> newPosts) {
+        void updatePosts(List<Post> newPosts) {
             posts.clear();
             posts.addAll(newPosts);
             notifyDataSetChanged();
@@ -301,17 +295,23 @@ public class MyPageFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            MyPost post = posts.get(position);
-            holder.userName.setText(post.userName);
-            holder.postTitle.setText(post.title);
-            holder.tvPostDate.setText(post.date);
-            holder.tvCommentCount.setText(String.valueOf(post.commentCount));
-            holder.tvScrapCount.setText(String.valueOf(post.scrapCount));
+            Post post = posts.get(position);
+            holder.userName.setText(post.getUserNickname());
+            holder.postTitle.setText(post.getTitle());
+            
+            if (post.getCreatedAt() != null) {
+                String formattedDate = new java.text.SimpleDateFormat("yyyy. MM. dd", java.util.Locale.KOREA)
+                        .format(post.getCreatedAt().toDate());
+                holder.tvPostDate.setText(formattedDate);
+            }
+            
+            holder.tvCommentCount.setText(String.valueOf(post.getCommentCount()));
+            holder.tvScrapCount.setText(String.valueOf(post.getScrapCount()));
 
             holder.tagGroup.removeAllViews();
-            for (String tag : post.tags) {
+            for (String tag : post.getHashtags()) {
                 Chip chip = new Chip(holder.itemView.getContext());
-                chip.setText(tag);
+                chip.setText(tag.startsWith("#") ? tag : "#" + tag);
                 chip.setTextColor(Color.rgb(34, 34, 34));
                 chip.setTextSize(14);
                 chip.setChipBackgroundColor(ColorStateList.valueOf(Color.rgb(255, 248, 232)));
@@ -325,7 +325,7 @@ public class MyPageFragment extends Fragment {
                 androidx.appcompat.app.AppCompatActivity activity =
                         (androidx.appcompat.app.AppCompatActivity) v.getContext();
                 activity.getSupportFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, new PostDetailFragment())
+                        .replace(R.id.fragmentContainer, PostDetailFragment.newInstance(post.getPostId()))
                         .addToBackStack(null)
                         .commit();
             });
@@ -356,21 +356,5 @@ public class MyPageFragment extends Fragment {
         }
     }
 
-    private static class MyPost {
-        String userName;
-        String title;
-        String date;
-        int commentCount;
-        int scrapCount;
-        List<String> tags;
-
-        MyPost(String userName, String title, String date, int commentCount, int scrapCount, String... tags) {
-            this.userName = userName;
-            this.title = title;
-            this.date = date;
-            this.commentCount = commentCount;
-            this.scrapCount = scrapCount;
-            this.tags = Arrays.asList(tags);
-        }
-    }
+    // [삭제됨] dummy 데이터 생성 함수 제거
 }
