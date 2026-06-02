@@ -154,6 +154,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
     }
 
+    public void updateSchedule(Schedule s) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put("title", s.getTitle());
+        cv.put("date", s.getDate());
+        cv.put("time", s.getTime());
+        cv.put("place_name", s.getPlaceName());
+        cv.put("memo", s.getMemo());
+        db.update("schedules", cv, "id=?", new String[]{String.valueOf(s.getId())});
+        db.close();
+    }
+
     private Schedule cursorToSchedule(Cursor c) {
         Schedule s = new Schedule();
         s.setId(c.getInt(c.getColumnIndexOrThrow("id")));
