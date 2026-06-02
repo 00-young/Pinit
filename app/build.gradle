@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
     id("com.google.gms.google-services")
+    id 'org.jetbrains.kotlin.android'
 }
 
 Properties properties = new Properties()
@@ -31,6 +32,9 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
 }
 
 dependencies {
@@ -54,4 +58,5 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation "com.google.guava:guava:31.1-android"
+    implementation 'androidx.core:core-ktx:1.12.0'
 }
