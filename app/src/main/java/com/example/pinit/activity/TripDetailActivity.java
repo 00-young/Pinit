@@ -110,43 +110,8 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
                 // 삭제
                 id -> {
-                    Schedule target = null;
-
-                    for (Schedule s : currentSchedules) {
-                        if (s.getId() == id) {
-                            target = s;
-                            break;
-                        }
-                    }
 
                     dbHelper.deleteSchedule(id);
-
-                    if (target != null) {
-
-                        FirebaseUser user =
-                                FirebaseAuth.getInstance().getCurrentUser();
-
-                        if (user != null) {
-
-                            FirestoreRepository repository =
-                                    new FirestoreRepository();
-
-                            String scheduleId =
-                                    user.getUid() + "_" + trip.getId();
-
-                            String dayId =
-                                    target.getDate();
-
-                            String itemId =
-                                    "item" + id;
-
-                            repository.deleteItem(
-                                    scheduleId,
-                                    dayId,
-                                    itemId
-                            );
-                        }
-                    }
 
                     buildDateTabs();
 
@@ -155,12 +120,18 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
                 // 수정 기능 (임시)
                 schedule -> {
-                    showEditTripDialog();
+                    // TODO: 일정 수정 기능 연결 예정
                 }
         );
         rvSchedule.setAdapter(scheduleAdapter);
 
         findViewById(R.id.btnAddSchedule).setOnClickListener(v -> openAddSchedule());
+        /*
+        findViewById(R.id.btnUploadFirestore)
+                .setOnClickListener(v -> {
+                    uploadScheduleToFirestore();
+                });
+         */
         findViewById(R.id.btnAddScheduleEmpty).setOnClickListener(v -> openAddSchedule());
 
         SupportMapFragment mapFragment = (SupportMapFragment)
@@ -168,16 +139,6 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         if (mapFragment != null) mapFragment.getMapAsync(this);
 
         loadTrip();
-
-        boolean openEdit =
-                getIntent().getBooleanExtra(
-                        "open_edit",
-                        false
-                );
-
-        if (openEdit) {
-            showEditTripDialog();
-        }
     }
 
     private void loadTrip() {
@@ -337,34 +298,91 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
             Schedule s = schedules.get(i);
 
-            double lat = s.getLatitude();
-            double lng = s.getLongitude();
+            String query =
+                    (s.getPlaceName() != null && !s.getPlaceName().isEmpty())
+                            ? s.getPlaceName()
+                            : s.getTitle();
+
+            if (query == null || query.isEmpty()) {
+
+                done[0]++;
+
+                if (done[0] == total) {
+                    onAllGeocodeDone(orderedPositions);
+                }
+
+                continue;
+            }
 
             final int index = i;
 
             final String markerTitle =
                     (i + 1) + ". " + s.getTitle();
 
-            if (lat != 0 && lng != 0) {
+            final String snippet = query;
 
-                LatLng latLng = new LatLng(lat, lng);
+            // =========================
+            // cache 사용
+            // =========================
 
-                orderedPositions[index] = latLng;
+            if (geocodeCache.containsKey(query)) {
 
-                googleMap.addMarker(
-                        new MarkerOptions()
-                                .position(latLng)
-                                .title(markerTitle)
-                                .snippet(s.getPlaceName())
-                                .icon(BitmapDescriptorFactory.defaultMarker(
-                                        BitmapDescriptorFactory.HUE_YELLOW))
-                );
-            }
+                LatLng cached = geocodeCache.get(query);
 
-            done[0]++;
+                runOnUiThread(() -> {
 
-            if (done[0] == total) {
-                onAllGeocodeDone(orderedPositions);
+                    if (cached != null && googleMap != null) {
+
+                        orderedPositions[index] = cached;
+
+                        googleMap.addMarker(
+                                new MarkerOptions()
+                                        .position(cached)
+                                        .title(markerTitle)
+                                        .snippet(snippet)
+                                        .icon(BitmapDescriptorFactory.defaultMarker(
+                                                BitmapDescriptorFactory.HUE_YELLOW))
+                        );
+                    }
+
+                    done[0]++;
+
+                    if (done[0] == total) {
+                        onAllGeocodeDone(orderedPositions);
+                    }
+                });
+
+            } else {
+
+                geocode(query, latLng -> {
+
+                    if (latLng != null) {
+                        geocodeCache.put(query, latLng);
+                    }
+
+                    runOnUiThread(() -> {
+
+                        if (latLng != null && googleMap != null) {
+
+                            orderedPositions[index] = latLng;
+
+                            googleMap.addMarker(
+                                    new MarkerOptions()
+                                            .position(latLng)
+                                            .title(markerTitle)
+                                            .snippet(snippet)
+                                            .icon(BitmapDescriptorFactory.defaultMarker(
+                                                    BitmapDescriptorFactory.HUE_YELLOW))
+                            );
+                        }
+
+                        done[0]++;
+
+                        if (done[0] == total) {
+                            onAllGeocodeDone(orderedPositions);
+                        }
+                    });
+                });
             }
         }
     }
@@ -407,6 +425,32 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         }
 
         fitCameraToPins(validPositions);
+    }
+
+    private void geocode(String address, GeocodeCallback callback) {
+        new Thread(() -> {
+            try {
+                String url = "https://maps.googleapis.com/maps/api/geocode/json?address="
+                        + java.net.URLEncoder.encode(address, "UTF-8")
+                        + "&language=ko&key=" + API_KEY;
+                OkHttpClient client = new OkHttpClient();
+                Request request = new Request.Builder().url(url).build();
+                Response response = client.newCall(request).execute();
+                String body = response.body().string();
+                JSONObject json = new JSONObject(body);
+                JSONArray results = json.optJSONArray("results");
+                if (results != null && results.length() > 0) {
+                    JSONObject loc = results.getJSONObject(0)
+                            .getJSONObject("geometry")
+                            .getJSONObject("location");
+                    callback.onResult(new LatLng(loc.getDouble("lat"), loc.getDouble("lng")));
+                } else {
+                    callback.onResult(null);
+                }
+            } catch (Exception e) {
+                callback.onResult(null);
+            }
+        }).start();
     }
 
     // ========== 지도 탭 → 역지오코딩 → 일정 추가 ==========
@@ -495,8 +539,6 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         s.setTripId(tripId);
         s.setTitle(title);
         s.setDate(selectedDate);
-        s.setLatitude(latLng.latitude);
-        s.setLongitude(latLng.longitude);
         s.setTime(time);
         s.setPlaceName(address.isEmpty()
                 ? String.format("%.5f, %.5f", latLng.latitude, latLng.longitude)
@@ -524,107 +566,6 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         intent.putExtra("trip_id", tripId);
         intent.putExtra("default_date", selectedDate);
         startActivityForResult(intent, REQUEST_ADD_SCHEDULE);
-    }
-
-    private void showEditTripDialog() {
-
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(48, 24, 48, 0);
-
-        EditText etTitle = new EditText(this);
-        etTitle.setHint("여행 이름");
-        etTitle.setText(trip.getTitle());
-        layout.addView(etTitle);
-
-        EditText etStartDate = new EditText(this);
-        etStartDate.setHint("시작일");
-        etStartDate.setText(trip.getStartDate());
-        layout.addView(etStartDate);
-
-        EditText etEndDate = new EditText(this);
-        etEndDate.setHint("종료일");
-        etEndDate.setText(trip.getEndDate());
-        layout.addView(etEndDate);
-
-        EditText etBudget = new EditText(this);
-        etBudget.setHint("총 예산");
-        etBudget.setText(String.valueOf(trip.getBudget()));
-        layout.addView(etBudget);
-
-        new AlertDialog.Builder(this)
-                .setTitle("여행 수정")
-                .setView(layout)
-
-                .setPositiveButton("저장", (dialog, which) -> {
-
-                    String title =
-                            etTitle.getText().toString().trim();
-
-                    String startDate =
-                            etStartDate.getText().toString().trim();
-
-                    String endDate =
-                            etEndDate.getText().toString().trim();
-
-                    double budget = 0;
-
-                    try {
-                        budget = Double.parseDouble(
-                                etBudget.getText().toString().trim()
-                        );
-                    } catch (Exception ignored) {}
-
-                    // =========================
-                    // SQLite 수정
-                    // =========================
-
-                    trip.setTitle(title);
-                    trip.setStartDate(startDate);
-                    trip.setEndDate(endDate);
-                    trip.setBudget(budget);
-
-                    dbHelper.updateTrip(trip);
-
-                    // =========================
-                    // Firestore 수정
-                    // =========================
-
-                    FirebaseUser user =
-                            FirebaseAuth.getInstance().getCurrentUser();
-
-                    if (user != null) {
-
-                        String scheduleId =
-                                user.getUid() + "_" + trip.getId();
-
-                        FirestoreRepository repository =
-                                new FirestoreRepository();
-
-                        repository.updateSchedule(
-                                scheduleId,
-                                title,
-                                startDate,
-                                endDate,
-                                budget
-                        );
-                    }
-
-                    // =========================
-                    // 화면 새로고침
-                    // =========================
-
-                    loadTrip();
-
-                    Toast.makeText(
-                            this,
-                            "여행 정보가 수정되었습니다.",
-                            Toast.LENGTH_SHORT
-                    ).show();
-                })
-
-                .setNegativeButton("취소", null)
-                .show();
     }
 
     @Override

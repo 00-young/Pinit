@@ -20,20 +20,13 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
-import com.example.pinit.adapter.ScheduleDetailAdapter;
 import com.example.pinit.model.Schedule;
-import com.example.pinit.model.DailySchedule; // 추가됨
-import com.example.pinit.model.MyPlan; // 추가됨
+import com.example.pinit.model.DailySchedule;
+import com.example.pinit.model.MyPlan;
 import com.example.pinit.model.post.Post;
+import com.example.pinit.adapter.ContentBlockAdapter;
+import com.example.pinit.model.post.ContentBlock;
 
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.LatLngBounds;
-import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.Timestamp;
@@ -53,59 +46,42 @@ public class PostDetailFragment extends Fragment {
     private TextView tvPostTitle;
     private TextView tvAuthorName;
     private TextView tvPostDate;
+
+    // 추가됨: 수정, 삭제 버튼 변수
+    private TextView btnEditPost;
+    private TextView btnDeletePost;
+
     private ImageView btnActionScrap;
     private ImageView btnActionShare;
+    private RecyclerView rvContentBlocks;
 
-    public static PostDetailFragment newInstance(
-            String postId
-    ) {
-
-        PostDetailFragment fragment =
-                new PostDetailFragment();
-
-        Bundle args = new Bundle();
-
-        args.putString(ARG_POST_ID, postId);
-
-        fragment.setArguments(args);
-
-        return fragment;
-    }
-
-    private RecyclerView rvPlacesDay1;
-    private RecyclerView rvPlacesDay2;
-    private Button btnShowMore;
-    private Button btnShowMore2;
-
-    // [수정됨] 담기 버튼에서 접근할 수 있도록 데이터를 클래스 멤버 변수로 선언
     private List<Schedule> day1Schedules = new ArrayList<>();
     private List<Schedule> day2Schedules = new ArrayList<>();
+
+    public static PostDetailFragment newInstance(String postId) {
+        PostDetailFragment fragment = new PostDetailFragment();
+        Bundle args = new Bundle();
+        args.putString(ARG_POST_ID, postId);
+        fragment.setArguments(args);
+        return fragment;
+    }
 
     @Nullable
     @Override
     public void onCreate(Bundle savedInstanceState) {
-
         super.onCreate(savedInstanceState);
-
         if (getArguments() != null) {
-
-            postId = getArguments()
-                    .getString(ARG_POST_ID);
+            postId = getArguments().getString(ARG_POST_ID);
         }
     }
 
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.activity_post_detail, container, false);
 
-        // 뷰 바인딩
-        rvPlacesDay1 = view.findViewById(R.id.rvPlacesDay1);
-        rvPlacesDay2 = view.findViewById(R.id.rvPlacesDay2);
-        btnShowMore = view.findViewById(R.id.btnShowMore);
-        btnShowMore2 = view.findViewById(R.id.btnShowMore2);
         btnActionScrap = view.findViewById(R.id.btnActionScrap);
         btnActionShare = view.findViewById(R.id.btnActionShare);
+        rvContentBlocks = view.findViewById(R.id.rvContentBlocks);
 
-        // 상단 뒤로가기 및 프로필 버튼 이벤트
         view.findViewById(R.id.btnBack).setOnClickListener(v -> getParentFragmentManager().popBackStack());
 
         view.findViewById(R.id.btnOpenMyPage).setOnClickListener(v ->
@@ -114,418 +90,193 @@ public class PostDetailFragment extends Fragment {
                         .addToBackStack(null)
                         .commit());
 
-        view.findViewById(R.id.authorProfileRow).setOnClickListener(v ->
-                getParentFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance("\uD138\uD138\uD55C \uBCF5\uC22D\uC544"))
-                        .addToBackStack(null)
-                        .commit());
-
-        // [핵심] 서버에서 데이터를 불러오는(척하는) 더미 데이터 세팅 함수 호출
-        // (버튼 클릭보다 먼저 데이터가 세팅되어 있어야 합니다)
         db = FirebaseFirestore.getInstance();
 
+        tvPostTitle = view.findViewById(R.id.tvPostTitle);
+        tvAuthorName = view.findViewById(R.id.tvAuthorName);
+        tvPostDate = view.findViewById(R.id.tvPostDate);
+
+        // 추가됨: 버튼 바인딩
+        btnEditPost = view.findViewById(R.id.btnEditPost);
+        btnDeletePost = view.findViewById(R.id.btnDeletePost);
+
         loadPostDetail();
+        loadContentBlocks();
         recordView();
-
-        // [수정됨] 일정 담기 이벤트 리스너 분리 적용
-        Button btnSaveAllSchedule = view.findViewById(R.id.btnSaveAllSchedule);
-        if (btnSaveAllSchedule != null) {
-            btnSaveAllSchedule.setOnClickListener(v -> saveAllSchedulesToMyTravel());
-        }
-
-        Button btnSaveDay1Schedule = view.findViewById(R.id.btnSaveDay1Schedule);
-        if (btnSaveDay1Schedule != null) {
-            btnSaveDay1Schedule.setOnClickListener(v -> saveSingleDayToMyTravel(1));
-        }
-
-        Button btnSaveDay2Schedule = view.findViewById(R.id.btnSaveDay2Schedule);
-        if (btnSaveDay2Schedule != null) {
-            btnSaveDay2Schedule.setOnClickListener(v -> saveSingleDayToMyTravel(2));
-        }
-
-        // 하단 액션바 이벤트 (공유, 댓글, 스크랩)
         setupBottomActions(view);
 
-        // 지도 초기화
-        setupMapFragments(view);
-
-        // 더보기 버튼 토글 로직
-        btnShowMore.setOnClickListener(v -> toggleRecyclerViewVisibility(rvPlacesDay1, btnShowMore));
-        btnShowMore2.setOnClickListener(v -> toggleRecyclerViewVisibility(rvPlacesDay2, btnShowMore2));
-        btnActionScrap.setOnClickListener(v -> {toggleScrap();});
-        btnActionShare.setOnClickListener(v -> {sharePostByLink();});
-
-        tvPostTitle = view.findViewById(R.id.tvPostTitle);
-
-        tvAuthorName = view.findViewById(R.id.tvAuthorName);
-
-        tvPostDate = view.findViewById(R.id.tvPostDate);
+        btnActionScrap.setOnClickListener(v -> toggleScrap());
+        btnActionShare.setOnClickListener(v -> sharePostByLink());
 
         return view;
     }
 
-    private void sharePostByLink() {
-
-        if (FirebaseAuth.getInstance()
-                .getCurrentUser() == null) {
-            return;
-        }
-
-        String uid = FirebaseAuth
-                .getInstance()
-                .getCurrentUser()
-                .getUid();
-
-        String shareId =
-                UUID.randomUUID().toString();
-
-        Map<String, Object> shareData =
-                new HashMap<>();
-
-        shareData.put("userId", uid);
-
-        shareData.put(
-                "shareType",
-                "copy_link"
-        );
-
-        shareData.put(
-                "createdAt",
-                Timestamp.now()
-        );
-
+    private void loadContentBlocks() {
         db.collection("posts")
                 .document(postId)
-                .collection("shares")
-                .document(shareId)
-                .set(shareData);
+                .collection("contentBlocks")
+                .orderBy("sortOrder")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<ContentBlock> blocks = queryDocumentSnapshots.toObjects(ContentBlock.class);
+                    rvContentBlocks.setLayoutManager(new LinearLayoutManager(getContext()));
+                    rvContentBlocks.setAdapter(new ContentBlockAdapter(blocks));
+                });
+    }
 
-        // 실제 링크 복사
-        ClipboardManager clipboard =
-                (ClipboardManager)
-                        requireContext()
-                                .getSystemService(
-                                        Context.CLIPBOARD_SERVICE
-                                );
-
-        ClipData clip =
-                ClipData.newPlainText(
-                        "postLink",
-                        "https://pinit.com/post/"
-                                + postId
-                );
-
+    private void sharePostByLink() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        String shareId = UUID.randomUUID().toString();
+        Map<String, Object> shareData = new HashMap<>();
+        shareData.put("userId", uid);
+        shareData.put("shareType", "copy_link");
+        shareData.put("createdAt", Timestamp.now());
+        db.collection("posts").document(postId).collection("shares").document(shareId).set(shareData);
+        ClipboardManager clipboard = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("postLink", "https://pinit.com/post/" + postId);
         clipboard.setPrimaryClip(clip);
-
-        Toast.makeText(
-                getContext(),
-                "링크 복사 완료",
-                Toast.LENGTH_SHORT
-        ).show();
+        Toast.makeText(getContext(), "링크 복사 완료", Toast.LENGTH_SHORT).show();
     }
 
     private void toggleScrap() {
-
-        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
-            return;
-        }
-
-        String uid = FirebaseAuth
-                .getInstance()
-                .getCurrentUser()
-                .getUid();
-
-        DocumentReference scrapRef = db.collection("posts")
-                        .document(postId)
-                        .collection("scrap")
-                        .document(uid);
-
-        scrapRef.get()
-                .addOnSuccessListener(documentSnapshot -> {
-                    if (documentSnapshot.exists()) {
-                        // 스크랩 취소
-                        scrapRef.delete().addOnSuccessListener(unused -> {
-                                    db.collection("posts").document(postId)
-                                            .update(
-                                                    "scrapCount",
-                                                    FieldValue.increment(-1)
-                                            );
-                                    Toast.makeText(
-                                            getContext(),
-                                            "스크랩 취소",
-                                            Toast.LENGTH_SHORT
-                                    ).show();
-                                });
-
-                    } else {
-                        Map<String, Object> scrapData = new HashMap<>();
-                        scrapData.put("createdAt", Timestamp.now());
-                        scrapData.put("userId", uid);
-                        scrapRef.set(scrapData).addOnSuccessListener(unused -> {
-                                    db.collection("posts")
-                                            .document(postId)
-                                            .update(
-                                                    "scrapCount",
-                                                    FieldValue.increment(1)
-                                            );
-                                    Toast.makeText(
-                                            getContext(),
-                                            "스크랩 완료",
-                                            Toast.LENGTH_SHORT
-                                    ).show();
-                                });
-                    }
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        DocumentReference scrapRef = db.collection("posts").document(postId).collection("scrap").document(uid);
+        scrapRef.get().addOnSuccessListener(documentSnapshot -> {
+            if (documentSnapshot.exists()) {
+                scrapRef.delete().addOnSuccessListener(unused -> {
+                    db.collection("posts").document(postId).update("scrapCount", FieldValue.increment(-1));
+                    Toast.makeText(getContext(), "스크랩 취소", Toast.LENGTH_SHORT).show();
                 });
+            } else {
+                Map<String, Object> scrapData = new HashMap<>();
+                scrapData.put("createdAt", Timestamp.now());
+                scrapData.put("userId", uid);
+                scrapRef.set(scrapData).addOnSuccessListener(unused -> {
+                    db.collection("posts").document(postId).update("scrapCount", FieldValue.increment(1));
+                    Toast.makeText(getContext(), "스크랩 완료", Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
 
     private void loadPostDetail() {
-
-        db.collection("posts")
-                .document(postId)
-                .get()
-                .addOnSuccessListener(documentSnapshot -> {
-
-                    if (!documentSnapshot.exists()) {
-                        return;
-                    }
-
-                    Post post =
-                            documentSnapshot.toObject(Post.class);
-
-                    if (post == null) {
-                        return;
-                    }
-
-                    bindPostData(post);
-                });
+        db.collection("posts").document(postId).get().addOnSuccessListener(documentSnapshot -> {
+            if (!documentSnapshot.exists()) return;
+            Post post = documentSnapshot.toObject(Post.class);
+            if (post == null) return;
+            bindPostData(post);
+        });
     }
 
     private void recordView() {
-
-        if(FirebaseAuth.getInstance().getCurrentUser() == null){
-            return;
-        }
-
-        String uid = FirebaseAuth
-                .getInstance()
-                .getCurrentUser()
-                .getUid();
-
+        if(FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
         String viewId = UUID.randomUUID().toString();
-
-        Map<String, Object> viewData =
-                new HashMap<>();
-
+        Map<String, Object> viewData = new HashMap<>();
         viewData.put("userId", uid);
-
         viewData.put("device", "android");
-
-        viewData.put(
-                "viewedAt",
-                Timestamp.now()
-        );
-
-        db.collection("posts")
-                .document(postId)
-                .collection("views")
-                .document(viewId)
-                .set(viewData);
+        viewData.put("viewedAt", Timestamp.now());
+        db.collection("posts").document(postId).collection("views").document(viewId).set(viewData);
     }
 
     private void bindPostData(Post post) {
-
         tvPostTitle.setText(post.getTitle());
         tvAuthorName.setText(post.getUserNickname());
 
+        View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
+        if (authorRow != null) {
+            authorRow.setOnClickListener(v -> {
+                getParentFragmentManager().beginTransaction()
+                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(post.getUserId()))
+                        .addToBackStack(null)
+                        .commit();
+            });
+        }
+
         if (post.getCreatedAt() != null) {
-            String formattedDate =
-                    new java.text.SimpleDateFormat(
-                            "yyyy. MM. dd",
-                            java.util.Locale.KOREA
-                    ).format(
-                            post.getCreatedAt().toDate()
-                    );
+            String formattedDate = new java.text.SimpleDateFormat("yyyy. MM. dd", java.util.Locale.KOREA)
+                    .format(post.getCreatedAt().toDate());
             tvPostDate.setText(formattedDate);
         }
-    }
 
-    // ==========================================
-    // [내 여행에 담기] 로직 구현부
-    // ==========================================
-    private void saveAllSchedulesToMyTravel() {
-        MyPlan scrapedPlan = new MyPlan(); // 빈 바구니 생성
-        scrapedPlan.setTitle("1박 2일 상하이 여행기 (스크랩)");
-        scrapedPlan.setDate("2026.05.23 ~ 2026.05.24");
-        scrapedPlan.setCountry("상하이");
+        //  내 게시물일 경우 버튼 보이기 및 동작 연결
+        String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
+                FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
 
-        List<DailySchedule> allDays = new ArrayList<>();
+        if (post.getUserId().equals(currentUid)) {
+            if (btnEditPost != null) btnEditPost.setVisibility(View.VISIBLE);
+            if (btnDeletePost != null) btnDeletePost.setVisibility(View.VISIBLE);
 
-        // DAY 1 데이터 조립
-        DailySchedule day1 = new DailySchedule();
-        day1.setDayTitle("DAY 1");
-        day1.setDate("2026.05.23");
-        day1.setScheduleObjects(day1Schedules); // 미리 만들어둔 더미 데이터 넣기
-        allDays.add(day1);
-
-        // DAY 2 데이터 조립
-        DailySchedule day2 = new DailySchedule();
-        day2.setDayTitle("DAY 2");
-        day2.setDate("2026.05.24");
-        day2.setScheduleObjects(day2Schedules);
-        allDays.add(day2);
-
-        // 완성된 날짜 리스트를 최종 바구니에 담기
-        scrapedPlan.setSchedules(allDays);
-
-        // TODO: DB 또는 서버에 scrapedPlan 객체 저장하는 코드 작성 위치
-
-        Toast.makeText(getContext(), "전체 일정이 내 여행에 담겼습니다!", Toast.LENGTH_SHORT).show();
+            if (btnDeletePost != null) {
+                btnDeletePost.setOnClickListener(v -> deleteMyPost());
+            }
+            if (btnEditPost != null) {
+                btnEditPost.setOnClickListener(v -> editMyPost());
+            }
+        } else {
+            if (btnEditPost != null) btnEditPost.setVisibility(View.GONE);
+            if (btnDeletePost != null) btnDeletePost.setVisibility(View.GONE);
+        }
     }
 
     private void saveSingleDayToMyTravel(int dayNumber) {
         MyPlan singleDayPlan = new MyPlan();
         singleDayPlan.setTitle("상하이 여행기 - DAY " + dayNumber + " (스크랩)");
         singleDayPlan.setCountry("상하이");
-
         List<DailySchedule> selectedDayList = new ArrayList<>();
         DailySchedule targetDay = new DailySchedule();
-
         if (dayNumber == 1) {
             targetDay.setDayTitle("DAY 1");
             targetDay.setDate("2026.05.23");
             targetDay.setScheduleObjects(day1Schedules);
-            singleDayPlan.setDate("2026.05.23"); // 하루짜리 여행이므로 날짜 고정
+            singleDayPlan.setDate("2026.05.23");
         } else if (dayNumber == 2) {
             targetDay.setDayTitle("DAY 2");
             targetDay.setDate("2026.05.24");
             targetDay.setScheduleObjects(day2Schedules);
             singleDayPlan.setDate("2026.05.24");
         }
-
         selectedDayList.add(targetDay);
         singleDayPlan.setSchedules(selectedDayList);
-
-        // TODO: DB 또는 서버에 singleDayPlan 객체 저장하는 코드 작성 위치
-
         Toast.makeText(getContext(), "DAY " + dayNumber + " 일정이 내 여행에 담겼습니다!", Toast.LENGTH_SHORT).show();
     }
-    // ==========================================
 
     private void setupBottomActions(View view) {
-
         ImageView btnActionComment = view.findViewById(R.id.btnActionComment);
-
         btnActionComment.setOnClickListener(v -> {
             CommentBottomSheetFragment commentSheet = CommentBottomSheetFragment.newInstance(postId);
-            commentSheet.show(
-                    getChildFragmentManager(),
-                    "CommentBottomSheet"
-            );
+            commentSheet.show(getChildFragmentManager(), "CommentBottomSheet");
         });
     }
 
-    private void setupMapFragments(View view) {
-        SupportMapFragment mapFragment1 = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.mapViewDetail);
-        if (mapFragment1 != null) {
-            mapFragment1.getMapAsync(this::setupDay1Map);
-        }
-        View map1View = view.findViewById(R.id.mapViewDetail);
-        if (map1View != null) {
-            map1View.setOnTouchListener((v, event) -> {
-                v.getParent().requestDisallowInterceptTouchEvent(true);
-                return false;
-            });
-        }
-
-        SupportMapFragment mapFragment2 = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.mapViewDetail2);
-        if (mapFragment2 != null) {
-            mapFragment2.getMapAsync(this::setupDay2Map);
-        }
-        View map2View = view.findViewById(R.id.mapViewDetail2);
-        if (map2View != null) {
-            map2View.setOnTouchListener((v, event) -> {
-                v.getParent().requestDisallowInterceptTouchEvent(true);
-                return false;
-            });
-        }
+    //  추가됨: 게시물 삭제 로직
+    private void deleteMyPost() {
+        new android.app.AlertDialog.Builder(getContext())
+                .setTitle("게시물 삭제")
+                .setMessage("정말로 이 게시물을 삭제하시겠습니까?\n삭제된 게시물은 복구할 수 없습니다.")
+                .setPositiveButton("삭제", (dialog, which) -> {
+                    db.collection("posts").document(postId).delete()
+                            .addOnSuccessListener(aVoid -> {
+                                Toast.makeText(getContext(), "게시물이 삭제되었습니다.", Toast.LENGTH_SHORT).show();
+                                getParentFragmentManager().popBackStack();
+                            })
+                            .addOnFailureListener(e -> {
+                                Toast.makeText(getContext(), "삭제 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            });
+                })
+                .setNegativeButton("취소", null)
+                .show();
     }
 
-    // 리사이클러뷰 어댑터 연결 공통 함수
-    private void renderRecyclerView(RecyclerView recyclerView, List<Schedule> schedules) {
-        if (recyclerView == null) return;
+    // 💡 추가됨: 게시물 수정 로직 (코틀린 파일의 Companion object 호출!)
+    private void editMyPost() {
+        Toast.makeText(getContext(), "게시물 수정 화면으로 이동합니다.", Toast.LENGTH_SHORT).show();
 
-        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        recyclerView.setNestedScrollingEnabled(false);
-
-        // CreatePostFragment와 완전히 동일한 어댑터 구조 적용
-        recyclerView.setAdapter(new ScheduleDetailAdapter(
-                getContext(),
-                schedules,
-                schedule -> {}, // 상세 조회 화면이므로 클릭 이벤트 비활성화
-                id -> {},
-                schedule -> {}
-        ));
-    }
-
-    // 더보기 / 접기 토글 함수
-    private void toggleRecyclerViewVisibility(RecyclerView rv, Button btn) {
-        if (rv.getVisibility() == View.VISIBLE) {
-            rv.setVisibility(View.GONE);
-            btn.setText("더보기 ▼");
-        } else {
-            rv.setVisibility(View.VISIBLE);
-            btn.setText("접기 ▲");
-        }
-    }
-
-    // ==========================================
-    // 지도 그리기 (기존 코드 유지)
-    // ==========================================
-    private void setupDay1Map(GoogleMap googleMap) {
-        List<LatLng> routePoints = new ArrayList<>();
-        routePoints.add(new LatLng(31.1443, 121.8083));
-        routePoints.add(new LatLng(31.2000, 121.6000));
-        routePoints.add(new LatLng(31.2150, 121.5500));
-        routePoints.add(new LatLng(31.2350, 121.4800));
-        routePoints.add(new LatLng(31.2397, 121.4898));
-
-        PolylineOptions polylineOptions = new PolylineOptions().color(Color.parseColor("#FFDA44")).width(8f);
-        LatLngBounds.Builder builder = new LatLngBounds.Builder();
-
-        for (int i = 0; i < routePoints.size(); i++) {
-            LatLng point = routePoints.get(i);
-            polylineOptions.add(point);
-            builder.include(point);
-            googleMap.addMarker(new MarkerOptions()
-                    .position(point)
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
-        }
-        googleMap.addPolyline(polylineOptions);
-        googleMap.setOnMapLoadedCallback(() ->
-                googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 100))
-        );
-    }
-
-    private void setupDay2Map(GoogleMap googleMap) {
-        List<LatLng> routePoints = new ArrayList<>();
-        routePoints.add(new LatLng(31.2222, 121.4744));
-        routePoints.add(new LatLng(31.1433, 121.6580));
-        routePoints.add(new LatLng(31.2272, 121.4921));
-
-        PolylineOptions polylineOptions = new PolylineOptions().color(Color.parseColor("#FFDA44")).width(8f);
-        LatLngBounds.Builder builder = new LatLngBounds.Builder();
-
-        for (int i = 0; i < routePoints.size(); i++) {
-            LatLng point = routePoints.get(i);
-            polylineOptions.add(point);
-            builder.include(point);
-            googleMap.addMarker(new MarkerOptions()
-                    .position(point)
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
-        }
-        googleMap.addPolyline(polylineOptions);
-        googleMap.setOnMapLoadedCallback(() ->
-                googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 100))
-        );
+        getParentFragmentManager().beginTransaction()
+                .replace(R.id.fragmentContainer, CreatePostFragment.Companion.newInstanceForEdit(postId))
+                .addToBackStack(null)
+                .commit();
     }
 }

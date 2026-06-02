@@ -2,11 +2,17 @@ package com.example.pinit.model;
 
 public class RecommendedPlace {
 
+    private String placeId;
+
     private String name;
 
     private String category;
 
     private String address;
+
+    private double latitude;
+
+    private double longitude;
 
     private double rating;
 
@@ -17,20 +23,28 @@ public class RecommendedPlace {
     private String detailScore;
 
     public RecommendedPlace(
+            String placeId,
             String name,
             String category,
             String address,
+            double latitude,
+            double longitude,
             double rating,
             String congestionLevel,
             double score,
             String detailScore
     ) {
+        this.placeId = placeId;
 
         this.name = name;
 
         this.category = category;
 
         this.address = address;
+
+        this.latitude = latitude;
+
+        this.longitude = longitude;
 
         this.rating = rating;
 
@@ -53,7 +67,16 @@ public class RecommendedPlace {
 
         return address;
     }
+    public String getPlaceId() {
+        return placeId;
+    }
+    public double getLatitude() {
+        return latitude;
+    }
 
+    public double getLongitude() {
+        return longitude;
+    }
     public double getRating() {
         return rating;
     }

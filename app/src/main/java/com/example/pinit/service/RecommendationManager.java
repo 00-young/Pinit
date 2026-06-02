@@ -41,7 +41,6 @@ public class RecommendationManager {
             double lng,
             RecommendationCallback callback
             ) {
-
         List<String> categories =
                 recommendationService.getRecommendedCategories(user);
 
@@ -224,12 +223,18 @@ public class RecommendationManager {
 
                         RecommendedPlace recommendedPlace =
                                 new RecommendedPlace(
+                                        place.get("place_id"),
+
 
                                         place.get("name"),
 
+                                        place.get("types"),
+
                                         place.get("address"),
 
-                                        place.get("types"),
+                                        place.get("lat") != null ? Double.parseDouble(place.get("lat")) : 0,
+
+                                        place.get("lng") != null ? Double.parseDouble(place.get("lng")) : 0,
 
                                         finalRating,
 
@@ -281,12 +286,17 @@ public class RecommendationManager {
 
                         RecommendedPlace recommendedPlace =
                                 new RecommendedPlace(
+                                        place.get("place_id"),
 
                                         place.get("name"),
 
+                                        place.get("types"),
+
                                         place.get("address"),
 
-                                        place.get("types"),
+                                        place.get("lat") != null ? Double.parseDouble(place.get("lat")) : 0,
+
+                                        place.get("lng") != null ? Double.parseDouble(place.get("lng")) : 0,
 
                                         finalRating,
 

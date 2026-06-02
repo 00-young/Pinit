@@ -21,7 +21,7 @@ public class User {
     private String theme;
 
     private String budgetType;
-    
+
     @ServerTimestamp
     private Date createdAt;
     
