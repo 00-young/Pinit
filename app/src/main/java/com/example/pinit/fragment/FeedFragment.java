@@ -222,34 +222,85 @@ public class FeedFragment extends Fragment {
         }
     }
 
-    // 트랙 1: 홈 피드 불러오기 (임시: 전체 게시물 최신순)
+    // 트랙 1: 홈 피드 = 본인 + 팔로우한 사람들의 글 (전체공개, 1달 이내, 최신순)
     private void loadHomeFeed() {
+        com.google.firebase.auth.FirebaseUser currentUser =
+                FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null || currentUser.getEmail() == null) {
+            postList.clear();
+            adapter.updatePosts(postList);
+            return;
+        }
+        String myEmail = currentUser.getEmail();
+
+        // 1) 내 follows 목록(이메일) 읽기 → 본인 이메일 추가
+        FirebaseFirestore.getInstance()
+                .collection("users").document(myEmail)
+                .collection("follows")
+                .get()
+                .addOnSuccessListener(followSnap -> {
+                    List<String> emails = new ArrayList<>();
+                    emails.add(myEmail); // 본인 글 포함
+                    for (DocumentSnapshot d : followSnap.getDocuments()) {
+                        emails.add(d.getId()); // follows 문서 ID = 팔로우 대상 이메일
+                    }
+
+                    // whereIn 은 최대 30개. 초과 시 앞에서 30개만.
+                    if (emails.size() > 30) {
+                        emails = emails.subList(0, 30);
+                    }
+
+                    fetchFeedPosts(emails);
+                })
+                .addOnFailureListener(e -> {
+                    // follows 조회 실패 시 최소한 본인 글이라도
+                    List<String> onlyMe = new ArrayList<>();
+                    onlyMe.add(myEmail);
+                    fetchFeedPosts(onlyMe);
+                });
+    }
+
+    // 본인+팔로우 이메일 목록으로 posts 조회 → 1달 이내 공개글만 최신순
+    private void fetchFeedPosts(List<String> emails) {
+        if (emails.isEmpty()) {
+            postList.clear();
+            adapter.updatePosts(postList);
+            return;
+        }
+
+        // 1달 전 시각
+        long oneMonthAgoMillis = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000);
+
         FirebaseFirestore.getInstance().collection("posts")
-                .orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(20) // 일단 최신 글 20개만 가져오기
+                .whereIn("userEmail", emails)
+                .whereEqualTo("visibility", "public") // 전체공개만
                 .get()
                 .addOnSuccessListener(postSnapshots -> {
                     postList.clear();
 
-                    // 통째로 변환하지 않고, 하나씩 꺼내서 ID를 주입
                     for (DocumentSnapshot doc : postSnapshots.getDocuments()) {
                         Post post = doc.toObject(Post.class);
-                        if (post != null) {
-                            try {
-                                // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
-                                java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
-                                field.setAccessible(true);
-                                field.set(post, doc.getId());
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                            postList.add(post);
+                        if (post == null) continue;
+
+                        // 1달 이내 글만 (클라이언트 필터)
+                        if (post.getCreatedAt() == null) continue;
+                        long createdMillis = post.getCreatedAt().toDate().getTime();
+                        if (createdMillis < oneMonthAgoMillis) continue;
+
+                        try {
+                            java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
+                            field.setAccessible(true);
+                            field.set(post, doc.getId());
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
+                        postList.add(post);
                     }
 
                     adapter.updatePosts(postList);
-                    adapter.sortPostsByLatest();
-                });
+                    adapter.sortPostsByLatest(); // 최신순 정렬
+                })
+                .addOnFailureListener(Throwable::printStackTrace);
     }
 
     // 트랙 2: 검색 결과 불러오기 (전체 유저 대상)
@@ -304,6 +355,10 @@ public class FeedFragment extends Fragment {
                                 for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                                     Post post = doc.toObject(Post.class);
                                     if (post != null) {
+                                        // 비공개 글은 검색 결과에서 제외 (전체공개만)
+                                        if (!"public".equals(post.getVisibility())) {
+                                            continue;
+                                        }
                                         try {
                                             // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
                                             java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
