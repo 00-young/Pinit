@@ -621,13 +621,11 @@ class CreatePostFragment : Fragment() {
         val post = Post(
             postId = postId,
             userId = uid,
-            userEmail = userEmail,
             userNickname = "user",
             title = title,
             postImageType = "image",
             thumbnailImageUrl = "",
             hashtags = listOf("여행"),
-            visibility = visibility,
             createdAt = Timestamp.now()
         )
 

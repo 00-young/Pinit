@@ -1,13 +1,10 @@
-package com.example.pinit
-
+package com.example.pinit.index
 data class SearchIndex(
     val postId: String = "",
     val title: String = "",
     val content: String = "",
 
-    // 닉네임 검색용 추가
-    val nickname: String = "",
-    val writerNickname: String = "",
+    val userNickname: String = "",
 
     val mainTheme: String = "",
     val hashtags: List<String> = emptyList(),

@@ -118,12 +118,9 @@ class PostRepository {
             "postId" to post.postId,
             "title" to post.title,
             "thumbnailImageUrl" to post.thumbnailImageUrl,
-
-            // 닉네임 검색용
-            "nickname" to "",
-            "writerNickname" to "",
-
-            // 본문 검색용: ContentBlock 전체를 문자열로 저장
+            "postImageUrl" to post.thumbnailImageUrl,
+            "hashtags" to post.hashtags,
+            "userNickname" to post.userNickname,
             "content" to blocks.joinToString(" ") { it.toString() }
         )
 
