@@ -227,17 +227,7 @@
                 android:id="@+id/layoutDynamicContent"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <EditText
-                    android:id="@+id/etPostContent"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="150dp"
-                    android:background="@android:color/transparent"
-                    android:gravity="top"
-                    android:hint="내용을 입력하세요" />
-            </LinearLayout>
+                android:orientation="vertical" />
 
             <ImageView
                 android:id="@+id/ivSelectedPhoto"

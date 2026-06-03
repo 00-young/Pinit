@@ -895,10 +895,10 @@ class CreatePostFragment : Fragment() {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 24, 0, 24) }
+            ).apply { setMargins(0, 16, 0, 8) }
             hint = "내용을 입력하세요"
             setBackgroundColor(Color.TRANSPARENT)
-            minLines = 3
+            minLines = 2
             tag = editor
             // 이 블록에 포커스가 가면 삽입 기준 위치로 기억
             setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
