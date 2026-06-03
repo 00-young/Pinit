@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -15,6 +16,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.pinit.R;
 import com.example.pinit.manager.FirebaseManager;
 import com.example.pinit.model.User;
+import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -115,7 +117,7 @@ public class FollowListFragment extends Fragment {
                                     if (userDoc.exists()) {
                                         User user = userDoc.toObject(User.class);
                                         if (user != null) {
-                                            users.add(new FollowUser(user.getEmail(), user.getNickname(), user.getBio()));
+                                            users.add(new FollowUser(user.getEmail(), user.getNickname(), user.getBio(), user.getProfileImageUrl()));
                                         }
                                     }
                                     if (count.decrementAndGet() == 0) {
@@ -176,7 +178,16 @@ public class FollowListFragment extends Fragment {
             FollowUser user = users.get(position);
             holder.name.setText(user.name);
             holder.bio.setText(user.bio);
-            holder.avatar.setImageDrawable(null);
+            if (user.profileImageUrl != null
+                    && (user.profileImageUrl.startsWith("http://") || user.profileImageUrl.startsWith("https://"))) {
+                Glide.with(holder.avatar)
+                        .load(user.profileImageUrl)
+                        .placeholder(R.drawable.bg_profile_avatar)
+                        .error(R.drawable.bg_profile_avatar)
+                        .into(holder.avatar);
+            } else {
+                holder.avatar.setImageResource(R.drawable.bg_profile_avatar);
+            }
 
             // 버튼 상태 초기화 보장
             FirebaseManager.getInstance().checkFollowing(user.userId, isFollowing -> {
@@ -244,7 +255,7 @@ public class FollowListFragment extends Fragment {
             TextView name;
             TextView bio;
             TextView actionButton;
-            android.widget.ImageView avatar;
+            ImageView avatar;
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
@@ -260,11 +271,13 @@ public class FollowListFragment extends Fragment {
         String userId;
         String name;
         String bio;
+        String profileImageUrl;
 
-        FollowUser(String userId, String name, String bio) {
+        FollowUser(String userId, String name, String bio, String profileImageUrl) {
             this.userId = userId;
             this.name = name;
             this.bio = bio;
+            this.profileImageUrl = profileImageUrl;
         }
     }
 }
