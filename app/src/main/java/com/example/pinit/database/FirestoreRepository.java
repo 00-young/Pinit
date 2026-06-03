@@ -273,4 +273,43 @@ public class FirestoreRepository {
                 });
     }
 
+    public void updateItem(
+            String scheduleId,
+            String dayId,
+            String itemId,
+            Schedule schedule
+    ) {
+
+        Map<String, Object> item = new HashMap<>();
+
+        item.put("title", schedule.getTitle());
+        item.put("time", schedule.getTime());
+
+        item.put("placeName", schedule.getTitle());
+
+        item.put("memo", schedule.getMemo());
+        item.put("color", schedule.getColor());
+
+        item.put("address", schedule.getPlaceName());
+
+        item.put("latitude", schedule.getLatitude());
+        item.put("longitude", schedule.getLongitude());
+
+        item.put("category", schedule.getCategory());
+        item.put("googlePlaceId", schedule.getGooglePlaceId());
+
+        db.collection("schedules")
+                .document(scheduleId)
+                .collection("days")
+                .document(dayId)
+                .collection("items")
+                .document(itemId)
+                .update(item)
+                .addOnSuccessListener(unused -> {
+                    Log.d(TAG, "Item 수정 성공");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Item 수정 실패", e);
+                });
+    }
 }
