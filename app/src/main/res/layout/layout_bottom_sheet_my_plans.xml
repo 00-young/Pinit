@@ -16,10 +16,27 @@
         android:gravity="center"
         android:layout_marginBottom="16dp"/>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerViewMyPlans"
+    <!-- 목록과 빈 상태 안내를 같은 영역에 겹쳐 둔다 -->
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:paddingBottom="16dp"/>
+        android:layout_height="match_parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewMyPlans"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="16dp"/>
+
+        <!-- 등록된 여행이 없을 때 표시 (기본은 숨김) -->
+        <TextView
+            android:id="@+id/tvEmptyPlans"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="등록된 여행 일정이 없습니다"
+            android:textSize="15sp"
+            android:textColor="#999999"
+            android:visibility="gone"/>
+    </FrameLayout>
 </LinearLayout>

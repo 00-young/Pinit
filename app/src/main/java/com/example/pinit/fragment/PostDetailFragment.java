@@ -46,6 +46,7 @@ public class PostDetailFragment extends Fragment {
     private TextView tvPostTitle;
     private TextView tvAuthorName;
     private TextView tvPostDate;
+    private TextView tvViewCount;
 
     // 추가됨: 수정, 삭제 버튼 변수
     private TextView btnEditPost;
@@ -95,6 +96,7 @@ public class PostDetailFragment extends Fragment {
         tvPostTitle = view.findViewById(R.id.tvPostTitle);
         tvAuthorName = view.findViewById(R.id.tvAuthorName);
         tvPostDate = view.findViewById(R.id.tvPostDate);
+        tvViewCount = view.findViewById(R.id.tvViewCount); // 레이아웃에 없으면 null (방어 처리됨)
 
         // 추가됨: 버튼 바인딩
         btnEditPost = view.findViewById(R.id.btnEditPost);
@@ -166,12 +168,30 @@ public class PostDetailFragment extends Fragment {
             if (!documentSnapshot.exists()) return;
             Post post = documentSnapshot.toObject(Post.class);
             if (post == null) return;
+
+            // 비공개 글은 작성자만 열람 가능
+            String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null
+                    ? FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
+            boolean isPrivate = "private".equals(post.getVisibility());
+            boolean isAuthor = post.getUserId() != null && post.getUserId().equals(currentUid);
+            if (isPrivate && !isAuthor) {
+                Toast.makeText(getContext(), "비공개 게시물입니다.", Toast.LENGTH_SHORT).show();
+                getParentFragmentManager().popBackStack();
+                return;
+            }
+
             bindPostData(post);
         });
     }
 
     private void recordView() {
-        if(FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        // 상세화면 열 때마다 조회수 +1, 성공하면 최신 조회수를 화면에 반영
+        db.collection("posts").document(postId)
+                .update("viewCount", FieldValue.increment(1))
+                .addOnSuccessListener(unused -> refreshViewCount());
+
+        // 조회 기록 (누가 언제 봤는지)
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
         String viewId = UUID.randomUUID().toString();
         Map<String, Object> viewData = new HashMap<>();
@@ -181,9 +201,26 @@ public class PostDetailFragment extends Fragment {
         db.collection("posts").document(postId).collection("views").document(viewId).set(viewData);
     }
 
+    /** 증가된 최신 viewCount 를 다시 읽어 화면에 표시 */
+    private void refreshViewCount() {
+        db.collection("posts").document(postId).get().addOnSuccessListener(doc -> {
+            Post post = doc.toObject(Post.class);
+            if (post == null) return;
+            bindViewCount(post.getViewCount());
+        });
+    }
+
+    /** 조회수를 화면에 표시 (조회수 TextView 가 없으면 무시) */
+    private void bindViewCount(int count) {
+        if (tvViewCount != null) {
+            tvViewCount.setText("조회 " + count);
+        }
+    }
+
     private void bindPostData(Post post) {
         tvPostTitle.setText(post.getTitle());
         tvAuthorName.setText(post.getUserNickname());
+        bindViewCount(post.getViewCount());
 
         View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
         if (authorRow != null) {
