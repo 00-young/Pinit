@@ -618,16 +618,16 @@ class CreatePostFragment : Fragment() {
         val visibility = if (spinnerVisibility?.selectedItem?.toString() == "나만보기")
             Post.VISIBILITY_PRIVATE else Post.VISIBILITY_PUBLIC
 
+        val nickname = FirebaseAuth.getInstance().currentUser?.email?.substringBefore("@") ?: "user"
+
         val post = Post(
             postId = postId,
             userId = uid,
-            userEmail = userEmail,
-            userNickname = "user",
+            userNickname = nickname,
             title = title,
             postImageType = "image",
             thumbnailImageUrl = "",
             hashtags = listOf("여행"),
-            visibility = visibility,
             createdAt = Timestamp.now()
         )
 

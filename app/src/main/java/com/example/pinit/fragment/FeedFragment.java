@@ -19,7 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
-import com.example.pinit.SearchIndex;
+import com.example.pinit.index.SearchIndex;
 import com.example.pinit.SearchRepository;
 import com.example.pinit.activity.PostSearchActivity;
 import com.example.pinit.adapter.FeedAdapter;
