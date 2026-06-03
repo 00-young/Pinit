@@ -11,6 +11,9 @@ import androidx.appcompat.widget.Toolbar;
 import com.example.pinit.R;
 import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.Schedule;
+import com.example.pinit.database.FirestoreRepository;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 import java.util.Calendar;
 import java.util.Locale;
@@ -21,6 +24,7 @@ public class AddScheduleActivity extends AppCompatActivity {
     private DatabaseHelper dbHelper;
     private int tripId;
     private int editScheduleId = -1;
+    private String originalDate;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,6 +40,10 @@ public class AddScheduleActivity extends AppCompatActivity {
         dbHelper = new DatabaseHelper(this);
         tripId = getIntent().getIntExtra("trip_id", -1);
         editScheduleId = getIntent().getIntExtra("schedule_id", -1);
+        originalDate =
+                getIntent().getStringExtra(
+                        "schedule_date"
+                );
 
         etTitle = findViewById(R.id.etTitle);
         etDate = findViewById(R.id.etDate);
@@ -87,11 +95,100 @@ public class AddScheduleActivity extends AppCompatActivity {
         s.setTime(etTime.getText().toString());
         s.setPlaceName(etPlaceName.getText().toString());
         s.setMemo(etMemo.getText().toString());
+        s.setLatitude(
+                getIntent().getDoubleExtra(
+                        "schedule_latitude",
+                        0
+                )
+        );
+
+        s.setLongitude(
+                getIntent().getDoubleExtra(
+                        "schedule_longitude",
+                        0
+                )
+        );
+
+        s.setColor(
+                getIntent().getStringExtra(
+                        "schedule_color"
+                )
+        );
+
+        s.setCategory(
+                getIntent().getStringExtra(
+                        "schedule_category"
+                )
+        );
+
+        s.setGooglePlaceId(
+                getIntent().getStringExtra(
+                        "schedule_google_place_id"
+                )
+        );
 
         if (editScheduleId != -1) {
             s.setId(editScheduleId);
             dbHelper.updateSchedule(s);
-            Toast.makeText(this, "일정이 수정되었습니다!", Toast.LENGTH_SHORT).show();
+
+            // =========================
+            // Firestore 수정
+            // =========================
+            FirebaseUser user =
+                    FirebaseAuth.getInstance()
+                            .getCurrentUser();
+
+            if (user != null) {
+                FirestoreRepository repository = new FirestoreRepository();
+                String scheduleId = user.getUid() + "_" + tripId;
+                String newDayId = s.getDate();
+
+                String itemId =
+                        "item" + editScheduleId;
+
+// =========================
+// 날짜 변경 없는 경우
+// =========================
+
+                if (originalDate != null
+                        && originalDate.equals(newDayId)) {
+
+                    repository.updateItem(
+                            scheduleId,
+                            newDayId,
+                            itemId,
+                            s
+                    );
+
+                } else {
+
+                    // =========================
+                    // 기존 item 삭제
+                    // =========================
+
+                    repository.deleteItem(
+                            scheduleId,
+                            originalDate,
+                            itemId
+                    );
+
+                    // =========================
+                    // 새로운 day에 item 생성
+                    // =========================
+
+                    repository.uploadItem(
+                            scheduleId,
+                            newDayId,
+                            itemId,
+                            s
+                    );
+                }
+            }
+            Toast.makeText(
+                    this,
+                    "일정이 수정되었습니다!",
+                    Toast.LENGTH_SHORT
+            ).show();
         } else {
             s.setTripId(tripId);
             s.setColor("#FFDA44");
