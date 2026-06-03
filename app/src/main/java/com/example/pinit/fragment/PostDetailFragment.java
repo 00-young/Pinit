@@ -1,0 +1,282 @@
+package com.example.pinit.fragment;
+
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.example.pinit.R;
+import com.example.pinit.model.Schedule;
+import com.example.pinit.model.DailySchedule;
+import com.example.pinit.model.MyPlan;
+import com.example.pinit.model.post.Post;
+import com.example.pinit.adapter.ContentBlockAdapter;
+import com.example.pinit.model.post.ContentBlock;
+
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.Timestamp;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FieldValue;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+public class PostDetailFragment extends Fragment {
+    private static final String ARG_POST_ID = "postId";
+    private FirebaseFirestore db;
+    private String postId;
+    private TextView tvPostTitle;
+    private TextView tvAuthorName;
+    private TextView tvPostDate;
+
+    // 추가됨: 수정, 삭제 버튼 변수
+    private TextView btnEditPost;
+    private TextView btnDeletePost;
+
+    private ImageView btnActionScrap;
+    private ImageView btnActionShare;
+    private RecyclerView rvContentBlocks;
+
+    private List<Schedule> day1Schedules = new ArrayList<>();
+    private List<Schedule> day2Schedules = new ArrayList<>();
+
+    public static PostDetailFragment newInstance(String postId) {
+        PostDetailFragment fragment = new PostDetailFragment();
+        Bundle args = new Bundle();
+        args.putString(ARG_POST_ID, postId);
+        fragment.setArguments(args);
+        return fragment;
+    }
+
+    @Nullable
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        if (getArguments() != null) {
+            postId = getArguments().getString(ARG_POST_ID);
+        }
+    }
+
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.activity_post_detail, container, false);
+
+        btnActionScrap = view.findViewById(R.id.btnActionScrap);
+        btnActionShare = view.findViewById(R.id.btnActionShare);
+        rvContentBlocks = view.findViewById(R.id.rvContentBlocks);
+
+        view.findViewById(R.id.btnBack).setOnClickListener(v -> getParentFragmentManager().popBackStack());
+
+        view.findViewById(R.id.btnOpenMyPage).setOnClickListener(v ->
+                getParentFragmentManager().beginTransaction()
+                        .replace(R.id.fragmentContainer, new MyPageFragment())
+                        .addToBackStack(null)
+                        .commit());
+
+        db = FirebaseFirestore.getInstance();
+
+        tvPostTitle = view.findViewById(R.id.tvPostTitle);
+        tvAuthorName = view.findViewById(R.id.tvAuthorName);
+        tvPostDate = view.findViewById(R.id.tvPostDate);
+
+        // 추가됨: 버튼 바인딩
+        btnEditPost = view.findViewById(R.id.btnEditPost);
+        btnDeletePost = view.findViewById(R.id.btnDeletePost);
+
+        loadPostDetail();
+        loadContentBlocks();
+        recordView();
+        setupBottomActions(view);
+
+        btnActionScrap.setOnClickListener(v -> toggleScrap());
+        btnActionShare.setOnClickListener(v -> sharePostByLink());
+
+        return view;
+    }
+
+    private void loadContentBlocks() {
+        db.collection("posts")
+                .document(postId)
+                .collection("contentBlocks")
+                .orderBy("sortOrder")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<ContentBlock> blocks = queryDocumentSnapshots.toObjects(ContentBlock.class);
+                    rvContentBlocks.setLayoutManager(new LinearLayoutManager(getContext()));
+                    rvContentBlocks.setAdapter(new ContentBlockAdapter(blocks));
+                });
+    }
+
+    private void sharePostByLink() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        String shareId = UUID.randomUUID().toString();
+        Map<String, Object> shareData = new HashMap<>();
+        shareData.put("userId", uid);
+        shareData.put("shareType", "copy_link");
+        shareData.put("createdAt", Timestamp.now());
+        db.collection("posts").document(postId).collection("shares").document(shareId).set(shareData);
+        ClipboardManager clipboard = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("postLink", "https://pinit.com/post/" + postId);
+        clipboard.setPrimaryClip(clip);
+        Toast.makeText(getContext(), "링크 복사 완료", Toast.LENGTH_SHORT).show();
+    }
+
+    private void toggleScrap() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        DocumentReference scrapRef = db.collection("posts").document(postId).collection("scrap").document(uid);
+        scrapRef.get().addOnSuccessListener(documentSnapshot -> {
+            if (documentSnapshot.exists()) {
+                scrapRef.delete().addOnSuccessListener(unused -> {
+                    db.collection("posts").document(postId).update("scrapCount", FieldValue.increment(-1));
+                    Toast.makeText(getContext(), "스크랩 취소", Toast.LENGTH_SHORT).show();
+                });
+            } else {
+                Map<String, Object> scrapData = new HashMap<>();
+                scrapData.put("createdAt", Timestamp.now());
+                scrapData.put("userId", uid);
+                scrapRef.set(scrapData).addOnSuccessListener(unused -> {
+                    db.collection("posts").document(postId).update("scrapCount", FieldValue.increment(1));
+                    Toast.makeText(getContext(), "스크랩 완료", Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+
+    private void loadPostDetail() {
+        db.collection("posts").document(postId).get().addOnSuccessListener(documentSnapshot -> {
+            if (!documentSnapshot.exists()) return;
+            Post post = documentSnapshot.toObject(Post.class);
+            if (post == null) return;
+            bindPostData(post);
+        });
+    }
+
+    private void recordView() {
+        if(FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        String viewId = UUID.randomUUID().toString();
+        Map<String, Object> viewData = new HashMap<>();
+        viewData.put("userId", uid);
+        viewData.put("device", "android");
+        viewData.put("viewedAt", Timestamp.now());
+        db.collection("posts").document(postId).collection("views").document(viewId).set(viewData);
+    }
+
+    private void bindPostData(Post post) {
+        tvPostTitle.setText(post.getTitle());
+        tvAuthorName.setText(post.getUserNickname());
+
+        View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
+        if (authorRow != null) {
+            authorRow.setOnClickListener(v -> {
+                getParentFragmentManager().beginTransaction()
+                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(post.getUserId()))
+                        .addToBackStack(null)
+                        .commit();
+            });
+        }
+
+        if (post.getCreatedAt() != null) {
+            String formattedDate = new java.text.SimpleDateFormat("yyyy. MM. dd", java.util.Locale.KOREA)
+                    .format(post.getCreatedAt().toDate());
+            tvPostDate.setText(formattedDate);
+        }
+
+        //  내 게시물일 경우 버튼 보이기 및 동작 연결
+        String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
+                FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
+
+        if (post.getUserId().equals(currentUid)) {
+            if (btnEditPost != null) btnEditPost.setVisibility(View.VISIBLE);
+            if (btnDeletePost != null) btnDeletePost.setVisibility(View.VISIBLE);
+
+            if (btnDeletePost != null) {
+                btnDeletePost.setOnClickListener(v -> deleteMyPost());
+            }
+            if (btnEditPost != null) {
+                btnEditPost.setOnClickListener(v -> editMyPost());
+            }
+        } else {
+            if (btnEditPost != null) btnEditPost.setVisibility(View.GONE);
+            if (btnDeletePost != null) btnDeletePost.setVisibility(View.GONE);
+        }
+    }
+
+    private void saveSingleDayToMyTravel(int dayNumber) {
+        MyPlan singleDayPlan = new MyPlan();
+        singleDayPlan.setTitle("상하이 여행기 - DAY " + dayNumber + " (스크랩)");
+        singleDayPlan.setCountry("상하이");
+        List<DailySchedule> selectedDayList = new ArrayList<>();
+        DailySchedule targetDay = new DailySchedule();
+        if (dayNumber == 1) {
+            targetDay.setDayTitle("DAY 1");
+            targetDay.setDate("2026.05.23");
+            targetDay.setScheduleObjects(day1Schedules);
+            singleDayPlan.setDate("2026.05.23");
+        } else if (dayNumber == 2) {
+            targetDay.setDayTitle("DAY 2");
+            targetDay.setDate("2026.05.24");
+            targetDay.setScheduleObjects(day2Schedules);
+            singleDayPlan.setDate("2026.05.24");
+        }
+        selectedDayList.add(targetDay);
+        singleDayPlan.setSchedules(selectedDayList);
+        Toast.makeText(getContext(), "DAY " + dayNumber + " 일정이 내 여행에 담겼습니다!", Toast.LENGTH_SHORT).show();
+    }
+
+    private void setupBottomActions(View view) {
+        ImageView btnActionComment = view.findViewById(R.id.btnActionComment);
+        btnActionComment.setOnClickListener(v -> {
+            CommentBottomSheetFragment commentSheet = CommentBottomSheetFragment.newInstance(postId);
+            commentSheet.show(getChildFragmentManager(), "CommentBottomSheet");
+        });
+    }
+
+    //  추가됨: 게시물 삭제 로직
+    private void deleteMyPost() {
+        new android.app.AlertDialog.Builder(getContext())
+                .setTitle("게시물 삭제")
+                .setMessage("정말로 이 게시물을 삭제하시겠습니까?\n삭제된 게시물은 복구할 수 없습니다.")
+                .setPositiveButton("삭제", (dialog, which) -> {
+                    db.collection("posts").document(postId).delete()
+                            .addOnSuccessListener(aVoid -> {
+                                Toast.makeText(getContext(), "게시물이 삭제되었습니다.", Toast.LENGTH_SHORT).show();
+                                getParentFragmentManager().popBackStack();
+                            })
+                            .addOnFailureListener(e -> {
+                                Toast.makeText(getContext(), "삭제 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            });
+                })
+                .setNegativeButton("취소", null)
+                .show();
+    }
+
+    // 💡 추가됨: 게시물 수정 로직 (코틀린 파일의 Companion object 호출!)
+    private void editMyPost() {
+        Toast.makeText(getContext(), "게시물 수정 화면으로 이동합니다.", Toast.LENGTH_SHORT).show();
+
+        getParentFragmentManager().beginTransaction()
+                .replace(R.id.fragmentContainer, CreatePostFragment.Companion.newInstanceForEdit(postId))
+                .addToBackStack(null)
+                .commit();
+    }
+}

@@ -1,29 +1,32 @@
-package com.example.pinit.repository
+package com.example.pinit
+
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
-import com.example.pinit.index.SearchIndex
 
 class SearchRepository {
 
     private val db = FirebaseFirestore.getInstance()
 
     fun getSearchPosts(onResult: (List<SearchIndex>) -> Unit) {
+        // 1. '검색 전용 컬렉션(목차)'으로 연결
         db.collection("searchIndexPosts")
             .get()
             .addOnSuccessListener { result ->
                 val list = result.documents.map { doc ->
                     SearchIndex(
+                        postId = doc.id, //  문서 고유 ID 매핑 (상세 페이지 이동 시 필수)
                         title = doc.getString("title") ?: "",
                         content = doc.getString("content") ?: "",
                         mainTheme = doc.getString("mainTheme") ?: "",
                         hashtags = (doc.get("hashtags") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                         country = doc.getString("country") ?: "",
                         city = doc.getString("city") ?: "",
-                        travelerCount = doc.getLong("travelerCount") ?: 0L,
+                        travelerCount = try { doc.getLong("travelerCount") ?: 0L } catch (e: Exception) { 0L },
                         startDate = doc.getString("startDate") ?: "",
                         endDate = doc.getString("endDate") ?: "",
                         postImageUrl = doc.getString("postImageUrl") ?: "",
-                        createdAt = doc.getLong("createdAt") ?: 0L
+                        // 2. 목차에는 시간이 숫자로 잘 저장되어 있으므로 다시 읽어오도록 복구
+                        createdAt = try { doc.getLong("createdAt") ?: 0L } catch (e: Exception) { 0L }
                     )
                 }
                 onResult(list)
@@ -34,17 +37,6 @@ class SearchRepository {
             }
     }
 
-    fun searchFromJava(
-        keyword: String?,
-        selectedHashtags: List<String>,
-        onResult: (List<SearchIndex>) -> Unit
-    ) {
-        search(
-            keyword = keyword,
-            selectedHashtags = selectedHashtags,
-            onResult = onResult
-        )
-    }
     fun search(
         keyword: String? = null,
         travelerCount: Long? = null,
@@ -141,5 +133,3 @@ class SearchRepository {
                 postEndDate >= filterStartDate
     }
 }
-
-// 검색 기능
