@@ -62,12 +62,26 @@ class PostRepository {
         onFailure: (Exception) -> Unit
     ) {
         val postRef = db.collection("posts").document(post.postId)
+        val searchIndexRef = db.collection("searchIndexPosts").document(post.postId)
         val batch = db.batch()
 
-        // Post 문서
         batch.set(postRef, post)
 
-        // contentBlocks 하위 컬렉션
+        val searchIndexData = hashMapOf(
+            "postId" to post.postId,
+            "title" to post.title,
+            "thumbnailImageUrl" to post.thumbnailImageUrl,
+
+            // 닉네임 검색용
+            "nickname" to "",
+            "writerNickname" to "",
+
+            // 본문 검색용: ContentBlock 전체를 문자열로 저장
+            "content" to blocks.joinToString(" ") { it.toString() }
+        )
+
+        batch.set(searchIndexRef, searchIndexData)
+
         for (block in blocks) {
             val blockRef = postRef.collection("contentBlocks").document(block.blockId)
             batch.set(blockRef, block)
