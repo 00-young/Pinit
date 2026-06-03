@@ -38,6 +38,8 @@ import com.example.pinit.model.post.EditorBlock
 import com.example.pinit.model.post.Post
 import com.example.pinit.repository.PostRepository
 
+import com.bumptech.glide.Glide
+
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
@@ -49,7 +51,7 @@ import com.google.android.gms.maps.model.PolylineOptions
 
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore // DB 조회를 위해 추가됨
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 
 import org.json.JSONObject
@@ -73,6 +75,7 @@ class CreatePostFragment : Fragment() {
     private var layoutTagsContainer: LinearLayout? = null
     private var layoutTravelSettingTagsContainer: LinearLayout? = null
     private var ivSelectedPhoto: ImageView? = null
+    private var spinnerVisibility: Spinner? = null
 
     private lateinit var tvTotalBudget: TextView
     private lateinit var etBudgetFood: EditText
@@ -93,27 +96,35 @@ class CreatePostFragment : Fragment() {
 
     private var thumbnailUri: Uri? = null
 
+    // 마지막으로 포커스된 본문 텍스트 블록 (이 블록 뒤에 이미지/일정을 삽입)
     private var lastFocusedBlock: View? = null
+
+    // 업로드 진행 중 여부 (중복 업로드 방지 + 버튼 비활성화)
     private var isUploading = false
 
-    // 추가됨: 로딩 팝업 및 수정 모드 변수
-    @Suppress("DEPRECATION")
-    private var progressDialog: android.app.ProgressDialog? = null
+    // 수정 모드 (게시물 상세 → 수정으로 진입 시)
     private var editPostId: String? = null
-    private var isEditMode: Boolean = false
+    private val isEditMode: Boolean get() = editPostId != null
 
     private data class PendingImage(val editor: EditorBlock, val uri: Uri)
+
+    companion object {
+        private const val ARG_EDIT_POST_ID = "postId"
+
+        /** 게시물 수정 모드로 진입하는 인스턴스 생성 (PostDetailFragment 에서 호출) */
+        @JvmStatic
+        fun newInstanceForEdit(postId: String): CreatePostFragment {
+            val fragment = CreatePostFragment()
+            fragment.arguments = Bundle().apply { putString(ARG_EDIT_POST_ID, postId) }
+            return fragment
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 추가됨: 전달받은 ID가 있으면 수정 모드로 설정
-        arguments?.let {
-            if (it.containsKey("postId")) {
-                editPostId = it.getString("postId")
-                isEditMode = true
-            }
-        }
+        // 수정 모드로 진입한 경우 postId 읽기
+        editPostId = arguments?.getString(ARG_EDIT_POST_ID)
 
         travelSettingLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
@@ -129,12 +140,15 @@ class CreatePostFragment : Fragment() {
             }
         }
 
+        // 갤러리(Photo Picker) -> 이미지 블록. 권한 없이 사진만 선택 가능.
         galleryLauncher = registerForActivityResult(
             ActivityResultContracts.PickVisualMedia()
         ) { uri ->
+            // 사용자가 선택 안 하면 uri 가 null
             uri?.let { insertImageBlock(it) }
         }
 
+        // 장소 단건 -> place 블록 (단독 장소)
         placeSearchLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
@@ -145,6 +159,7 @@ class CreatePostFragment : Fragment() {
             }
         }
 
+        // 내 일정 불러오기 -> DAY 를 map + place 블록들로 펼침 (기존 글 유지, 커서 위치에 삽입)
         parentFragmentManager.setFragmentResultListener("planResult", this) { _, bundle ->
             val selectedPlan = getSerializableCompat(bundle, "selectedPlan", MyPlan::class.java)
             if (selectedPlan != null && layoutDynamicContent != null) {
@@ -190,8 +205,10 @@ class CreatePostFragment : Fragment() {
     // 블록 삽입 (각 뷰 tag 에 EditorBlock)
     // =====================================================
 
+    /** 이미지 블록 */
     private fun insertImageBlock(imageUri: Uri) {
         val container = layoutDynamicContent ?: return
+
         val editor = EditorBlock(
             id = UUID.randomUUID().toString(),
             type = ContentBlock.TYPE_IMAGE,
@@ -205,11 +222,18 @@ class CreatePostFragment : Fragment() {
             setImageURI(imageUri)
             tag = editor
         }
+        // 커서(마지막 포커스 블록) 다음에 삽입
         addBlockAtCursor(iv)
-        if (thumbnailUri == null) thumbnailUri = imageUri
+
+        // 첫 이미지를 대표 이미지(썸네일)로 지정.
+        if (thumbnailUri == null) {
+            thumbnailUri = imageUri
+        }
+        // 이미지 바로 뒤에 이어 쓸 텍스트 블록
         addCommentBlockAtCursor("내용을 입력하세요")
     }
 
+    /** 단독 place 블록 (장소 검색으로 직접 추가) */
     private fun insertPlaceBlock(placeName: String, placeAddress: String?) {
         val editor = EditorBlock(
             id = UUID.randomUUID().toString(),
@@ -222,8 +246,12 @@ class CreatePostFragment : Fragment() {
         addCommentBlockAtCursor("이 장소에 대한 이야기를 적어보세요...")
     }
 
+    /** DAY 하나를 map 블록 + place 블록들로 펼침 (커서 위치에 차례로 삽입) */
     private fun expandDayIntoBlocks(day: DailySchedule) {
+        // 1) map 블록: 지도 + 요약리스트 + 날짜 (담기용 데이터가 여기 모두 모임)
         insertMapBlock(day)
+
+        // 2) 장소마다 place 블록 + 코멘트 텍스트 블록
         day.places.forEachIndexed { index, placeName ->
             val editor = EditorBlock(
                 id = UUID.randomUUID().toString(),
@@ -236,16 +264,20 @@ class CreatePostFragment : Fragment() {
         }
     }
 
+    /** map 블록: 지도(동선+핀) + 요약 리스트(①②③ + 더보기). MapData 좌표를 미리 채운다. */
     private fun insertMapBlock(day: DailySchedule) {
         val container = layoutDynamicContent ?: return
+
         val mapBlockView = LayoutInflater.from(context)
             .inflate(R.layout.item_block_map, container, false)
         val tvDayTitle = mapBlockView.findViewById<TextView>(R.id.tvBlockMapDayTitle)
         val mapView = mapBlockView.findViewById<MapView>(R.id.blockMapView)
         val layoutSummary = mapBlockView.findViewById<LinearLayout>(R.id.layoutBlockMapSummary)
-        val btnReadMore = mapBlockView.findViewById<Button?>(R.id.btnBlockMapReadMore)
+        val btnReadMore = mapBlockView.findViewById<TextView?>(R.id.btnBlockMapReadMore)
 
         tvDayTitle.text = "${day.dayTitle} (${day.date})"
+
+        // 요약 리스트(①②③)를 markers/places 순서대로 채움
         layoutSummary.removeAllViews()
         day.places.forEachIndexed { index, name ->
             val tv = TextView(layoutSummary.context).apply {
@@ -257,6 +289,7 @@ class CreatePostFragment : Fragment() {
             layoutSummary.addView(tv)
         }
 
+        // 더보기/접기: 처음엔 펼친 상태(피그마처럼 일부만 보이게 하려면 초기 GONE 후 토글)
         btnReadMore?.setOnClickListener {
             if (layoutSummary.visibility == View.VISIBLE) {
                 layoutSummary.visibility = View.GONE
@@ -275,13 +308,29 @@ class CreatePostFragment : Fragment() {
             mapData = MapData()
         )
 
+        // Schedule 에 저장된 좌표로 바로 MapData 구성 (geocode 불필요)
+        val schedules = day.scheduleObjects ?: emptyList()
+        val markersFromCoords = schedules.mapNotNull { s ->
+            val name = if (!s.placeName.isNullOrEmpty()) s.placeName else s.title
+            if (s.latitude != 0.0 || s.longitude != 0.0) {
+                MapMarker(s.latitude, s.longitude, name ?: "", s.memo ?: "")
+            } else null
+        }
+
         mapView?.apply {
             onCreate(null)
             onResume()
             getMapAsync { googleMap ->
                 googleMap.uiSettings.setAllGesturesEnabled(false)
-                buildMapDataFromPlaces(googleMap, day.places) { built ->
-                    editor.mapData = built
+                if (markersFromCoords.isNotEmpty()) {
+                    // 저장된 좌표 사용
+                    editor.mapData = MapData(polyline = "", markers = markersFromCoords)
+                    drawSavedMarkers(googleMap, markersFromCoords)
+                } else {
+                    // 좌표가 없으면 장소명으로 geocode (폴백)
+                    buildMapDataFromPlaces(googleMap, day.places) { built ->
+                        editor.mapData = built
+                    }
                 }
             }
         }
@@ -290,9 +339,38 @@ class CreatePostFragment : Fragment() {
         addBlockAtCursor(mapBlockView)
     }
 
-    private fun buildPlaceHeaderView(placeName: String, placeAddress: String?, editor: EditorBlock): View {
+    /** 저장된 좌표(MapMarker)로 지도에 핀/동선 그리기 (geocode 불필요) */
+    private fun drawSavedMarkers(googleMap: GoogleMap, markers: List<MapMarker>) {
+        if (markers.isEmpty()) return
+        val positions = markers.map { LatLng(it.lat, it.lng) }
+        markers.forEachIndexed { i, m ->
+            googleMap.addMarker(
+                MarkerOptions().position(LatLng(m.lat, m.lng)).title("${i + 1}. ${m.title}")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW))
+            )
+        }
+        if (positions.size >= 2) {
+            googleMap.addPolyline(
+                PolylineOptions().addAll(positions).width(8f)
+                    .color(Color.parseColor("#FF6B35")).geodesic(true)
+            )
+            val builder = LatLngBounds.Builder()
+            positions.forEach { builder.include(it) }
+            googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 120))
+        } else {
+            googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(positions[0], 15f))
+        }
+    }
+
+    /** place 헤더 뷰 (핀 아이콘 + 장소명 + 주소) */
+    private fun buildPlaceHeaderView(
+        placeName: String,
+        placeAddress: String?,
+        editor: EditorBlock
+    ): View {
         val container = layoutDynamicContent!!
-        val placeView = LayoutInflater.from(context).inflate(R.layout.item_block_place, container, false)
+        val placeView = LayoutInflater.from(context)
+            .inflate(R.layout.item_block_place, container, false)
         val tvName = placeView.findViewById<TextView>(R.id.tvBlockPlaceName)
         val tvAddress = placeView.findViewById<TextView>(R.id.tvBlockPlaceAddress)
         tvName.text = placeName
@@ -306,15 +384,23 @@ class CreatePostFragment : Fragment() {
         return placeView
     }
 
-    private fun addCommentBlock(hint: String) { addCommentBlockInternal(hint, atCursor = false) }
-    private fun addCommentBlockAtCursor(hint: String) { addCommentBlockInternal(hint, atCursor = true) }
+    /** 다른 블록 사이의 코멘트(텍스트) 블록 */
+    private fun addCommentBlock(hint: String) {
+        addCommentBlockInternal(hint, atCursor = false)
+    }
+
+    /** 코멘트 블록을 커서(마지막 포커스 블록) 다음에 삽입 */
+    private fun addCommentBlockAtCursor(hint: String) {
+        addCommentBlockInternal(hint, atCursor = true)
+    }
 
     private fun addCommentBlockInternal(hint: String, atCursor: Boolean) {
         val container = layoutDynamicContent ?: return
         val editor = EditorBlock(id = UUID.randomUUID().toString(), type = ContentBlock.TYPE_TEXT)
         val et = EditText(context).apply {
             layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(0, 8, 0, 24) }
             this.hint = hint
             setBackgroundColor(Color.TRANSPARENT)
@@ -330,8 +416,14 @@ class CreatePostFragment : Fragment() {
     // 지도 로직
     // =====================================================
 
-    private fun buildMapDataFromPlaces(googleMap: GoogleMap?, places: List<String>?, onBuilt: (MapData) -> Unit) {
+    /** 장소명 리스트 -> 좌표 구해 핀/동선 그리고, 완성된 MapData 콜백 */
+    private fun buildMapDataFromPlaces(
+        googleMap: GoogleMap?,
+        places: List<String>?,
+        onBuilt: (MapData) -> Unit
+    ) {
         if (googleMap == null || places.isNullOrEmpty()) return
+
         val total = places.size
         val ordered = arrayOfNulls<LatLng>(total)
         val done = intArrayOf(0)
@@ -372,8 +464,17 @@ class CreatePostFragment : Fragment() {
     private fun fitCameraToPins(googleMap: GoogleMap?, positions: List<LatLng>) {
         if (googleMap == null) return
         when {
-            positions.isEmpty() -> googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(37.5665, 126.9780), 10f))
-            positions.size == 1 -> googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(positions[0], 15f))
+            positions.isEmpty() ->
+                googleMap.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(
+                        LatLng(37.5665, 126.9780),
+                        10f
+                    )
+                )
+
+            positions.size == 1 ->
+                googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(positions[0], 15f))
+
             else -> {
                 val builder = LatLngBounds.Builder()
                 positions.forEach { builder.include(it) }
@@ -386,14 +487,16 @@ class CreatePostFragment : Fragment() {
         Thread {
             try {
                 val url = "https://maps.googleapis.com/maps/api/geocode/json?address=" +
-                        URLEncoder.encode(address, "UTF-8") + "&language=ko&key=$apiKey"
+                        URLEncoder.encode(address, "UTF-8") +
+                        "&language=ko&key=$apiKey"
                 val client = OkHttpClient()
                 val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()
                 val body = response.body?.string() ?: ""
                 val results = JSONObject(body).optJSONArray("results")
                 if (results != null && results.length() > 0) {
-                    val loc = results.getJSONObject(0).getJSONObject("geometry").getJSONObject("location")
+                    val loc = results.getJSONObject(0)
+                        .getJSONObject("geometry").getJSONObject("location")
                     callback.onResult(LatLng(loc.getDouble("lat"), loc.getDouble("lng")))
                 } else {
                     callback.onResult(null)
@@ -433,7 +536,9 @@ class CreatePostFragment : Fragment() {
         val budgetWatcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) { calculateTotalBudget() }
+            override fun afterTextChanged(s: Editable?) {
+                calculateTotalBudget()
+            }
         }
         etBudgetFood.addTextChangedListener(budgetWatcher)
         etBudgetTransport.addTextChangedListener(budgetWatcher)
@@ -442,13 +547,13 @@ class CreatePostFragment : Fragment() {
         etBudgetSightseeing.addTextChangedListener(budgetWatcher)
         etBudgetEtc.addTextChangedListener(budgetWatcher)
 
-        val spinnerVisibility = view.findViewById<Spinner>(R.id.spinnerVisibility)
+        spinnerVisibility = view.findViewById(R.id.spinnerVisibility)
         val visibilityItems = arrayOf("전체공개", "나만보기")
         val spinnerAdapter = ArrayAdapter(
             requireContext(), android.R.layout.simple_spinner_item, visibilityItems
         )
         spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerVisibility.adapter = spinnerAdapter
+        spinnerVisibility?.adapter = spinnerAdapter
 
         view.findViewById<View>(R.id.btnTravelSetting).setOnClickListener {
             travelSettingLauncher.launch(Intent(activity, PostTravelSettingActivity::class.java))
@@ -463,7 +568,11 @@ class CreatePostFragment : Fragment() {
             TagBottomSheetFragment().show(parentFragmentManager, "TagBottomSheet")
         }
         view.findViewById<View>(R.id.ivMenuPhoto).setOnClickListener {
-            galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            galleryLauncher.launch(
+                androidx.activity.result.PickVisualMediaRequest(
+                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                )
+            )
         }
         view.findViewById<View>(R.id.ivMenuLocation).setOnClickListener {
             val intent = Intent(activity, PlaceSearchActivity::class.java)
@@ -471,32 +580,17 @@ class CreatePostFragment : Fragment() {
             placeSearchLauncher.launch(intent)
         }
 
-        if (layoutDynamicContent?.childCount == 0) {
-            addTextBlock()
-        }
-
-        // 추가됨: 수정 모드일 때 제목 등을 불러오는 기능
         if (isEditMode) {
+            // 수정 모드: 버튼 텍스트 변경 + 기존 게시물 불러오기
             btnUpload.text = "수정하기"
-            loadExistingPostData()
-        }
-
-        return view
-    }
-
-    // 추가됨: 기존 글 내용 불러오기
-    private fun loadExistingPostData() {
-        val id = editPostId ?: return
-        FirebaseFirestore.getInstance().collection("posts").document(id)
-            .get()
-            .addOnSuccessListener { documentSnapshot ->
-                if (documentSnapshot.exists()) {
-                    val post = documentSnapshot.toObject(Post::class.java)
-                    if (post != null) {
-                        etPostTitle.setText(post.title)
-                    }
-                }
+            loadExistingPost(editPostId!!)
+        } else {
+            // 작성 모드: 초기 빈 텍스트 블록 (뷰 재생성 시 중복 방지)
+            if (layoutDynamicContent?.childCount == 0) {
+                addTextBlock()
             }
+        }
+        return view
     }
 
     // =====================================================
@@ -504,20 +598,32 @@ class CreatePostFragment : Fragment() {
     // =====================================================
     private fun uploadPost() {
         val title = etPostTitle.text.toString().trim()
-        if (title.isEmpty()) { toast("게시글 제목을 입력하세요"); return }
+        if (title.isEmpty()) {
+            toast("게시글 제목을 입력하세요"); return
+        }
 
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-        if (uid.isEmpty()) { toast("로그인이 필요합니다"); return }
+        if (uid.isEmpty()) {
+            toast("로그인이 필요합니다"); return
+        }
+        val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
 
+        // 중복 업로드 방지: 이미 업로드 중이면 무시
         if (isUploading) return
 
-        // 수정 모드면 기존 ID로 덮어쓰기
-        val finalPostId = if (isEditMode && editPostId != null) editPostId!! else UUID.randomUUID().toString()
+        // 수정 모드면 기존 postId, 아니면 새로 발급
+        val postId = editPostId ?: UUID.randomUUID().toString()
+
+        // 공개 범위: spinner 선택값 ("전체공개" → public, "나만보기" → private)
+        val visibility = if (spinnerVisibility?.selectedItem?.toString() == "나만보기")
+            Post.VISIBILITY_PRIVATE else Post.VISIBILITY_PUBLIC
+
+        val nickname = FirebaseAuth.getInstance().currentUser?.email?.substringBefore("@") ?: "user"
 
         val post = Post(
-            postId = finalPostId,
+            postId = postId,
             userId = uid,
-            userNickname = "user",
+            userNickname = nickname,
             title = title,
             postImageType = "image",
             thumbnailImageUrl = "",
@@ -538,31 +644,54 @@ class CreatePostFragment : Fragment() {
                     if (v is EditText) editor.text = v.text.toString().trim()
                     if (editor.text.isEmpty()) continue
                 }
+
                 ContentBlock.TYPE_IMAGE -> {
                     editor.localImageUri?.let { pendingImages.add(PendingImage(editor, it)) }
                 }
+                // place / map 은 데이터가 이미 채워져 있음
             }
             editor.sortOrder = order++
             editors.add(editor)
         }
 
+        // 갤러리 썸네일이 있으면 그대로 업로드
         if (thumbnailUri != null) {
             setUploading(true)
             uploadImagesThenSave(post, editors, pendingImages, null)
             return
         }
 
+        // 수정 모드: 새 갤러리 이미지를 안 골랐으면, 본문의 기존 이미지 URL을 썸네일로 사용
+        if (isEditMode) {
+            val existingImageUrl = editors.firstOrNull {
+                it.type == ContentBlock.TYPE_IMAGE && it.imageUrl.isNotEmpty()
+            }?.imageUrl
+            if (existingImageUrl != null) {
+                setUploading(true)
+                uploadImagesThenSave(post, editors, pendingImages, existingImageUrl)
+                return
+            }
+            // 본문에 이미지가 없으면 아래 Static Map 경로로 진행
+        }
+
+        // 썸네일이 없으면 모든 DAY 핀을 합친 Static Map 으로 대체.
+        // 좌표가 아직 안 채워진 map 블록이 있으면 먼저 geocode 로 보강한다.
         val mapEditors = editors.filter { it.type == ContentBlock.TYPE_MAP }
+
         if (mapEditors.isEmpty()) {
+            // 일정(map 블록)도 없고 썸네일도 없음 → 만들 수 없음
             toast("대표 이미지를 선택하거나 일정을 추가하세요")
             return
         }
 
+        // 업로드 시작(버튼 회색 잠금). geocode 동안에도 막힌 상태 유지.
         setUploading(true)
 
+        // 좌표 미확보 map 블록을 채운 뒤 업로드 진행
         ensureMapCoordinates(mapEditors) {
             val staticMapUrl = buildStaticMapUrl(editors)
             if (staticMapUrl == null) {
+                // geocode 후에도 좌표가 하나도 안 잡힌 경우
                 setUploading(false)
                 toast("지도를 만들 수 없습니다. 대표 이미지를 선택해주세요")
                 return@ensureMapCoordinates
@@ -571,31 +700,53 @@ class CreatePostFragment : Fragment() {
         }
     }
 
+    /**
+     * map 블록들 중 좌표(markers)가 비어있는 것을 geocode 로 채운 뒤 onReady 호출.
+     * 모든 보강이 끝나면(또는 보강할 게 없으면) 메인 스레드에서 onReady 를 부른다.
+     */
     private fun ensureMapCoordinates(mapEditors: List<EditorBlock>, onReady: () -> Unit) {
+        // 좌표가 비어있어 보강이 필요한 (블록, 장소명) 목록 수집
         data class Need(val editor: EditorBlock, val placeNames: List<String>)
+
         val needs = mapEditors.mapNotNull { editor ->
             val markers = editor.mapData?.markers ?: emptyList()
             val hasCoords = markers.any { it.lat != 0.0 || it.lng != 0.0 }
-            if (hasCoords) null else {
+            if (hasCoords) {
+                null   // 이미 좌표 있음 → 보강 불필요
+            } else {
                 val names = markers.map { it.title }.filter { it.isNotEmpty() }
                 if (names.isEmpty()) null else Need(editor, names)
             }
         }
-        if (needs.isEmpty()) { onReady(); return }
 
+        if (needs.isEmpty()) {
+            onReady()   // 보강할 것 없음 → 바로 진행
+            return
+        }
+
+        // 전체 블록 완료를 세는 카운터
         val blocksRemaining = intArrayOf(needs.size)
+
         for (need in needs) {
             val resolved = arrayOfNulls<MapMarker>(need.placeNames.size)
             val placeDone = intArrayOf(0)
+
             for (idx in need.placeNames.indices) {
                 val name = need.placeNames[idx]
                 geocode(name) { latLng ->
                     activity?.runOnUiThread {
-                        if (latLng != null) resolved[idx] = MapMarker(latLng.latitude, latLng.longitude, name, "")
+                        if (latLng != null) {
+                            resolved[idx] = MapMarker(latLng.latitude, latLng.longitude, name, "")
+                        }
                         placeDone[0]++
+
+                        // 이 블록의 모든 장소 geocode 완료 → mapData 갱신
                         if (placeDone[0] == need.placeNames.size) {
                             val markers = resolved.filterNotNull()
-                            if (markers.isNotEmpty()) need.editor.mapData = MapData(polyline = "", markers = markers)
+                            if (markers.isNotEmpty()) {
+                                need.editor.mapData = MapData(polyline = "", markers = markers)
+                            }
+                            // 블록 하나 완료 → 전체 완료 시 진행
                             blocksRemaining[0]--
                             if (blocksRemaining[0] == 0) onReady()
                         }
@@ -605,15 +756,23 @@ class CreatePostFragment : Fragment() {
         }
     }
 
-    private fun uploadImagesThenSave(post: Post, editors: List<EditorBlock>, pending: List<PendingImage>, staticMapUrl: String?) {
-        if (pending.isEmpty()) { savePost(post, editors, staticMapUrl); return }
+    private fun uploadImagesThenSave(
+        post: Post,
+        editors: List<EditorBlock>,
+        pending: List<PendingImage>,
+        staticMapUrl: String?
+    ) {
+        if (pending.isEmpty()) {
+            savePost(post, editors, staticMapUrl); return
+        }
 
         val storage = FirebaseStorage.getInstance()
         val remaining = intArrayOf(pending.size)
         val failed = booleanArrayOf(false)
 
         for (p in pending) {
-            val ref = storage.reference.child("posts/${post.postId}/blocks/${p.editor.id}.jpg")
+            val ref = storage.reference
+                .child("posts/${post.postId}/blocks/${p.editor.id}.jpg")
             ref.putFile(p.uri)
                 .continueWithTask { task ->
                     if (!task.isSuccessful) throw task.exception!!
@@ -634,65 +793,65 @@ class CreatePostFragment : Fragment() {
         }
     }
 
+    /**
+     * @param staticMapUrl 썸네일 미설정 시 사용할 Static Map URL (있으면 이걸로 저장).
+     */
     private fun savePost(post: Post, editors: List<EditorBlock>, staticMapUrl: String?) {
         val blocks = editors.map { ContentBlock.from(it) }
 
+        val successMsg = if (isEditMode) "수정 완료" else "업로드 성공"
+        val failMsg = if (isEditMode) "수정 실패" else "업로드 실패"
+
         if (thumbnailUri != null) {
-            postRepository.uploadPost(post, thumbnailUri!!, blocks,
-                {
-                    setUploading(false)
-                    toast(if (isEditMode) "수정 성공" else "업로드 성공")
-                    requireActivity().supportFragmentManager.popBackStack()
-                    null
-                },
-                {
-                    setUploading(false)
-                    toast(if (isEditMode) "수정 실패" else "업로드 실패")
-                    null
-                }
-            )
-        } else {
-            val postWithMap = post.copy(thumbnailImageUrl = staticMapUrl ?: "", postImageType = "map")
-            postRepository.uploadPostWithoutThumbnail(postWithMap, blocks,
-                {
-                    setUploading(false)
-                    toast(if (isEditMode) "수정 성공" else "업로드 성공")
-                    requireActivity().supportFragmentManager.popBackStack()
-                    null
-                },
-                {
-                    setUploading(false)
-                    toast(if (isEditMode) "수정 실패" else "업로드 실패")
-                    null
-                }
-            )
-        }
-    }
-
-    // 추가됨: 로딩 팝업 표시/숨기기
-    @Suppress("DEPRECATION")
-    private fun setUploading(uploading: Boolean) {
-        isUploading = uploading
-        btnUpload.isEnabled = !uploading
-        if (uploading) {
-            btnUpload.text = if (isEditMode) "수정 중..." else "업로드 중..."
-            btnUpload.setBackgroundColor(0xFFCCCCCC.toInt())
-            btnUpload.setTextColor(0xFF888888.toInt())
-
-            progressDialog = android.app.ProgressDialog(context).apply {
-                setMessage(if (isEditMode) "게시물을 수정하는 중입니다...\n잠시만 기다려주세요." else "게시물을 업로드하는 중입니다...\n잠시만 기다려주세요.")
-                setCancelable(false)
-                show()
+            // 새 갤러리 이미지를 썸네일로 업로드
+            if (isEditMode) {
+                postRepository.updatePost(
+                    post, thumbnailUri!!, blocks,
+                    { onSaveSuccess(successMsg) },
+                    { onSaveFailure(failMsg) }
+                )
+            } else {
+                postRepository.uploadPost(
+                    post, thumbnailUri!!, blocks,
+                    { onSaveSuccess(successMsg) },
+                    { onSaveFailure(failMsg) }
+                )
             }
         } else {
-            btnUpload.text = if (isEditMode) "수정하기" else "등록하기"
-            btnUpload.setBackgroundColor(0xFFFF6B35.toInt())
-            btnUpload.setTextColor(0xFFFFFFFF.toInt())
-
-            progressDialog?.takeIf { it.isShowing }?.dismiss()
+            // 썸네일 Uri 없음: staticMapUrl(또는 수정 모드의 기존 이미지 URL)을 썸네일로 사용
+            val postWithThumb = post.copy(
+                thumbnailImageUrl = staticMapUrl ?: "",
+                postImageType = if (staticMapUrl != null && staticMapUrl.contains("staticmap")) "map" else "image"
+            )
+            if (isEditMode) {
+                postRepository.updatePostWithoutThumbnail(
+                    postWithThumb, blocks,
+                    { onSaveSuccess(successMsg) },
+                    { onSaveFailure(failMsg) }
+                )
+            } else {
+                postRepository.uploadPostWithoutThumbnail(
+                    postWithThumb, blocks,
+                    { onSaveSuccess(successMsg) },
+                    { onSaveFailure(failMsg) }
+                )
+            }
         }
     }
 
+    private fun onSaveSuccess(msg: String) {
+        toast(msg)
+        requireActivity().supportFragmentManager.popBackStack()
+    }
+
+    private fun onSaveFailure(msg: String) {
+        setUploading(false)
+        toast(msg)
+    }
+
+    // =====================================================
+    // 헬퍼
+    // =====================================================
     private fun addTravelSettingTag(text: String?) {
         if (text == null || text.trim().isEmpty() || text == "날짜를 선택하세요") return
         val tvTag = TextView(context).apply {
@@ -723,19 +882,25 @@ class CreatePostFragment : Fragment() {
     }
 
     private fun parseBudgetNumber(text: String?): Int =
-        try { if (text.isNullOrBlank()) 0 else text.trim().toInt() } catch (e: NumberFormatException) { 0 }
+        try {
+            if (text.isNullOrBlank()) 0 else text.trim().toInt()
+        } catch (e: NumberFormatException) {
+            0
+        }
 
     private fun addTextBlock() {
         val container = layoutDynamicContent ?: return
         val editor = EditorBlock(id = UUID.randomUUID().toString(), type = ContentBlock.TYPE_TEXT)
         val editText = EditText(context).apply {
             layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(0, 24, 0, 24) }
             hint = "내용을 입력하세요"
             setBackgroundColor(Color.TRANSPARENT)
             minLines = 3
             tag = editor
+            // 이 블록에 포커스가 가면 삽입 기준 위치로 기억
             setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
         }
         container.addView(editText)
@@ -743,6 +908,11 @@ class CreatePostFragment : Fragment() {
 
     private fun dp(value: Int): Int = Math.round(value * resources.displayMetrics.density)
 
+    /**
+     * 본문에 블록을 삽입할 위치(인덱스)를 반환한다.
+     * - 마지막으로 포커스된 블록이 있으면 그 "다음" 위치
+     * - 없으면 맨 끝
+     */
     private fun insertIndex(): Int {
         val container = layoutDynamicContent ?: return 0
         val focused = lastFocusedBlock
@@ -753,38 +923,249 @@ class CreatePostFragment : Fragment() {
         return container.childCount
     }
 
+    /** 본문 컨테이너의 지정 위치에 뷰를 삽입 (포커스 블록 다음). 삽입 후 위치를 한 칸 밀어준다. */
     private fun addBlockAtCursor(viewToAdd: View) {
         val container = layoutDynamicContent ?: return
         val index = insertIndex()
         container.addView(viewToAdd, index)
+        // 다음 삽입이 방금 넣은 블록 뒤로 이어지도록 기준 갱신
         lastFocusedBlock = viewToAdd
     }
 
+    // =====================================================
+    // 수정 모드: 기존 게시물 불러와 본문 블록 복원
+    // =====================================================
+    private fun loadExistingPost(postId: String) {
+        val db = FirebaseFirestore.getInstance()
+        val postRef = db.collection("posts").document(postId)
+
+        // 1) 제목 등 게시물 기본 정보
+        postRef.get().addOnSuccessListener { doc ->
+            val post = doc.toObject(Post::class.java) ?: return@addOnSuccessListener
+            etPostTitle.setText(post.title)
+            // 기존 공개 범위를 spinner 에 반영
+            spinnerVisibility?.setSelection(
+                if (post.visibility == Post.VISIBILITY_PRIVATE) 1 else 0
+            )
+        }
+
+        // 2) 본문 블록 복원 (sortOrder 순)
+        postRef.collection("contentBlocks")
+            .orderBy("sortOrder")
+            .get()
+            .addOnSuccessListener { snap ->
+                val blocks = snap.toObjects(ContentBlock::class.java)
+                if (layoutDynamicContent == null) return@addOnSuccessListener
+                layoutDynamicContent!!.removeAllViews()
+                for (block in blocks) {
+                    restoreBlock(block)
+                }
+                // 맨 끝에 이어 쓸 빈 텍스트 블록 하나
+                addTextBlock()
+            }
+            .addOnFailureListener {
+                toast("본문을 불러오지 못했습니다")
+            }
+    }
+
+    /** 저장된 ContentBlock 하나를 작성 화면 블록으로 복원 */
+    private fun restoreBlock(block: ContentBlock) {
+        when (block.type) {
+            ContentBlock.TYPE_TEXT -> restoreTextBlock(block.textContent)
+            ContentBlock.TYPE_IMAGE -> restoreImageBlock(block.imageUrl, block.textContent)
+            ContentBlock.TYPE_PLACE -> restorePlaceBlock(block.placeName, block.placeAddress)
+            ContentBlock.TYPE_MAP -> restoreMapBlock(block)
+        }
+    }
+
+    private fun restoreTextBlock(text: String) {
+        val container = layoutDynamicContent ?: return
+        val editor = EditorBlock(id = UUID.randomUUID().toString(), type = ContentBlock.TYPE_TEXT, text = text)
+        val et = EditText(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 24, 0, 24) }
+            setText(text)
+            hint = "내용을 입력하세요"
+            setBackgroundColor(Color.TRANSPARENT)
+            minLines = 3
+            tag = editor
+            setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
+        }
+        container.addView(et)
+        lastFocusedBlock = et
+    }
+
+    /** 기존 이미지 블록: URL 을 표시하고, imageUrl 을 EditorBlock 에 그대로 보존(재업로드 방지) */
+    private fun restoreImageBlock(imageUrl: String, caption: String) {
+        val container = layoutDynamicContent ?: return
+        val editor = EditorBlock(
+            id = UUID.randomUUID().toString(),
+            type = ContentBlock.TYPE_IMAGE,
+            imageUrl = imageUrl,      // 기존 URL 보존 (localImageUri 는 null → 재업로드 안 함)
+            text = caption
+        )
+        val iv = ImageView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(220)
+            ).apply { setMargins(0, 16, 0, 16) }
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            tag = editor
+        }
+        Glide.with(this).load(imageUrl).into(iv)
+        container.addView(iv)
+        lastFocusedBlock = iv
+
+        // 수정 모드의 썸네일: 첫 이미지를 기준으로 삼되, 기존 URL 기반이라
+        // 저장 단계에서 새 썸네일을 안 고르면 기존 썸네일 유지하도록 처리한다.
+    }
+
+    private fun restorePlaceBlock(placeName: String, placeAddress: String) {
+        val container = layoutDynamicContent ?: return
+        val editor = EditorBlock(
+            id = UUID.randomUUID().toString(),
+            type = ContentBlock.TYPE_PLACE,
+            placeName = placeName,
+            placeAddress = placeAddress
+        )
+        val placeView = buildPlaceHeaderView(placeName, placeAddress, editor)
+        container.addView(placeView)
+        lastFocusedBlock = placeView
+    }
+
+    /** 기존 map 블록: 저장된 좌표(markers)로 바로 지도 복원 */
+    private fun restoreMapBlock(block: ContentBlock) {
+        val container = layoutDynamicContent ?: return
+
+        val mapBlockView = LayoutInflater.from(context)
+            .inflate(R.layout.item_block_map, container, false)
+        val tvDayTitle = mapBlockView.findViewById<TextView>(R.id.tvBlockMapDayTitle)
+        val mapView = mapBlockView.findViewById<MapView>(R.id.blockMapView)
+        val layoutSummary = mapBlockView.findViewById<LinearLayout>(R.id.layoutBlockMapSummary)
+        val btnReadMore = mapBlockView.findViewById<TextView?>(R.id.btnBlockMapReadMore)
+
+        tvDayTitle.text = if (block.dayTitle.isNotEmpty()) "${block.dayTitle} (${block.date})" else block.date
+
+        val markers = block.mapData?.markers ?: emptyList()
+        layoutSummary.removeAllViews()
+        markers.forEachIndexed { index, m ->
+            val tv = TextView(layoutSummary.context).apply {
+                text = "${index + 1}. ${m.title}"
+                setTextColor(0xFF222222.toInt())
+                setPadding(0, 10, 0, 10)
+                textSize = 15f
+            }
+            layoutSummary.addView(tv)
+        }
+
+        btnReadMore?.setOnClickListener {
+            if (layoutSummary.visibility == View.VISIBLE) {
+                layoutSummary.visibility = View.GONE
+                btnReadMore.text = "더보기 ▼"
+            } else {
+                layoutSummary.visibility = View.VISIBLE
+                btnReadMore.text = "접기 ▲"
+            }
+        }
+
+        // EditorBlock 에 기존 데이터 그대로 보존
+        val editor = EditorBlock(
+            id = UUID.randomUUID().toString(),
+            type = ContentBlock.TYPE_MAP,
+            date = block.date,
+            dayTitle = block.dayTitle,
+            mapData = block.mapData
+        )
+
+        mapView?.apply {
+            onCreate(null)
+            onResume()
+            getMapAsync { googleMap ->
+                googleMap.uiSettings.setAllGesturesEnabled(false)
+                drawSavedMarkers(googleMap, markers)
+            }
+        }
+
+        mapBlockView.tag = editor
+        container.addView(mapBlockView)
+        lastFocusedBlock = mapBlockView
+    }
+
+
+    /**
+     * 업로드 상태 전환.
+     * - 업로드 중: 버튼 비활성화 + 회색 + "업로드 중..." 텍스트
+     * - 완료/실패: 버튼 복구
+     */
+    private fun setUploading(uploading: Boolean) {
+        isUploading = uploading
+        btnUpload.isEnabled = !uploading
+        if (uploading) {
+            btnUpload.text = "업로드 중..."
+            btnUpload.setBackgroundColor(0xFFCCCCCC.toInt())   // 회색
+            btnUpload.setTextColor(0xFF888888.toInt())
+        } else {
+            btnUpload.text = "등록하기"
+            // 원래 배경/글자색으로 복구 (프로젝트 기본 버튼색에 맞게 조정)
+            btnUpload.setBackgroundColor(0xFFFF6B35.toInt())
+            btnUpload.setTextColor(0xFFFFFFFF.toInt())
+        }
+    }
+
+    /**
+     * 모든 map 블록의 마커를 합쳐 Static Maps API URL 을 만든다.
+     * 썸네일 미설정 시 게시글 대표 이미지로 사용.
+     * 마커가 하나도 없으면 null 반환.
+     *
+     * ※ 사용 중인 API 키에 "Maps Static API" 가 활성화돼 있어야 한다.
+     */
     private fun buildStaticMapUrl(editors: List<EditorBlock>): String? {
-        val allMarkers = editors.filter { it.type == ContentBlock.TYPE_MAP }
-            .mapNotNull { it.mapData?.markers }.flatten()
-            .filter { it.lat != 0.0 || it.lng != 0.0 }
+        // 모든 map 블록의 마커를 방문 순서대로 평탄화
+        val allMarkers = editors
+            .filter { it.type == ContentBlock.TYPE_MAP }
+            .mapNotNull { it.mapData?.markers }
+            .flatten()
+            .filter { it.lat != 0.0 || it.lng != 0.0 }   // 좌표 있는 것만
+
         if (allMarkers.isEmpty()) return null
 
-        val sb = StringBuilder("https://maps.googleapis.com/maps/api/staticmap?size=600x400&scale=2&maptype=roadmap")
+        val sb = StringBuilder("https://maps.googleapis.com/maps/api/staticmap?")
+        sb.append("size=600x400")          // 썸네일 크기
+        sb.append("&scale=2")              // 고해상도
+        sb.append("&maptype=roadmap")
+
+        // 마커: 번호 라벨(1~9) + 좌표
         allMarkers.forEachIndexed { index, m ->
-            val label = if (index < 9) "${index + 1}" else ""
+            val label = if (index < 9) "${index + 1}" else ""   // Static Maps 라벨은 0-9, A-Z 만
             sb.append("&markers=")
             if (label.isNotEmpty()) sb.append("label:$label%7C")
-            sb.append("color:0xFF6B35%7C${m.lat},${m.lng}")
+            sb.append("color:0xFF6B35%7C")
+            sb.append("${m.lat},${m.lng}")
         }
+
+        // 동선: 마커가 2개 이상이면 경로(path) 추가
         if (allMarkers.size >= 2) {
             sb.append("&path=color:0xFF6B35FF%7Cweight:4")
-            allMarkers.forEach { m -> sb.append("%7C${m.lat},${m.lng}") }
+            allMarkers.forEach { m ->
+                sb.append("%7C${m.lat},${m.lng}")
+            }
         }
+
         sb.append("&key=$apiKey")
         return sb.toString()
     }
 
-    private fun toast(msg: String) { Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
+    private fun toast(msg: String) {
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+    }
 
     @Suppress("DEPRECATION")
-    private fun <T : java.io.Serializable> getSerializableCompat(bundle: Bundle, key: String, clazz: Class<T>): T? {
+    private fun <T : java.io.Serializable> getSerializableCompat(
+        bundle: Bundle,
+        key: String,
+        clazz: Class<T>
+    ): T? {
         return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             bundle.getSerializable(key, clazz)
         } else {
@@ -793,15 +1174,5 @@ class CreatePostFragment : Fragment() {
         }
     }
 
-    //  추가됨: 자바에서 쉽게 호출하기 위함
-    companion object {
-        @JvmStatic
-        fun newInstanceForEdit(postId: String): CreatePostFragment {
-            val fragment = CreatePostFragment()
-            val args = Bundle()
-            args.putString("postId", postId)
-            fragment.arguments = args
-            return fragment
-        }
-    }
+
 }
