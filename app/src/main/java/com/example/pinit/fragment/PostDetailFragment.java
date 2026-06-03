@@ -27,6 +27,7 @@ import com.example.pinit.model.post.Post;
 import com.example.pinit.adapter.ContentBlockAdapter;
 import com.example.pinit.model.post.ContentBlock;
 
+import com.bumptech.glide.Glide;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.Timestamp;
@@ -45,6 +46,7 @@ public class PostDetailFragment extends Fragment {
     private String postId;
     private TextView tvPostTitle;
     private TextView tvAuthorName;
+    private ImageView authorProfileImage;
     private TextView tvPostDate;
     private TextView tvViewCount;
 
@@ -95,6 +97,7 @@ public class PostDetailFragment extends Fragment {
 
         tvPostTitle = view.findViewById(R.id.tvPostTitle);
         tvAuthorName = view.findViewById(R.id.tvAuthorName);
+        authorProfileImage = view.findViewById(R.id.authorProfileImage);
         tvPostDate = view.findViewById(R.id.tvPostDate);
         tvViewCount = view.findViewById(R.id.tvViewCount); // 레이아웃에 없으면 null (방어 처리됨)
 
@@ -220,6 +223,7 @@ public class PostDetailFragment extends Fragment {
     private void bindPostData(Post post) {
         tvPostTitle.setText(post.getTitle());
         tvAuthorName.setText(post.getUserNickname());
+        loadAuthorProfileImage(post.getUserEmail());
         bindViewCount(post.getViewCount());
 
         View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
@@ -256,6 +260,26 @@ public class PostDetailFragment extends Fragment {
             if (btnEditPost != null) btnEditPost.setVisibility(View.GONE);
             if (btnDeletePost != null) btnDeletePost.setVisibility(View.GONE);
         }
+    }
+
+    private void loadAuthorProfileImage(String email) {
+        if (authorProfileImage == null) return;
+
+        authorProfileImage.setImageResource(R.drawable.bg_profile_avatar);
+        if (email == null || email.isEmpty()) return;
+
+        db.collection("users").document(email).get()
+                .addOnSuccessListener(snapshot -> {
+                    String imageUrl = snapshot.getString("profileImageUrl");
+                    if (imageUrl != null
+                            && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+                        Glide.with(authorProfileImage)
+                                .load(imageUrl)
+                                .placeholder(R.drawable.bg_profile_avatar)
+                                .error(R.drawable.bg_profile_avatar)
+                                .into(authorProfileImage);
+                    }
+                });
     }
 
     private void saveSingleDayToMyTravel(int dayNumber) {

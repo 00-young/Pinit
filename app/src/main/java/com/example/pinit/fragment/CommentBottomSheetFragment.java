@@ -20,10 +20,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.example.pinit.R;
+import com.bumptech.glide.Glide;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.FieldValue;
 
@@ -47,6 +49,7 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment {
     private static final String ARG_POST_ID = "postId";
     private String postId;
     private String currentUserNickname = "";
+    private String currentUserProfileImageUrl = "";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -114,7 +117,7 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment {
                 commentId,
                 uid,
                 currentUserNickname,
-                "",
+                currentUserProfileImageUrl,
                 selectedParentCommentId, // 일반 댓글이면 null, 대댓글이면 부모 ID가 들어감
                 content,
                 Timestamp.now()
@@ -177,14 +180,22 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment {
     }
 
     private void loadCurrentUserNickname() {
-        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
-        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null || currentUser.getEmail() == null) return;
+        String email = currentUser.getEmail();
 
-        db.collection("users").document(uid).get()
+        db.collection("users").document(email).get()
                 .addOnSuccessListener(documentSnapshot -> {
                     if (documentSnapshot.exists()) {
-                        String nickname = documentSnapshot.getString("Nickname");
+                        String nickname = documentSnapshot.getString("nickname");
+                        if (nickname == null) nickname = documentSnapshot.getString("Nickname");
                         if (nickname != null) currentUserNickname = nickname;
+
+                        String imageUrl = documentSnapshot.getString("profileImageUrl");
+                        if (imageUrl != null
+                                && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+                            currentUserProfileImageUrl = imageUrl;
+                        }
                     }
                 });
     }
@@ -206,6 +217,14 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment {
         LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(isReply ? 60 : 80, isReply ? 60 : 80);
         ivProfile.setLayoutParams(imageParams);
         ivProfile.setImageResource(R.drawable.ic_profile_default);
+        if (profileImageUrl != null
+                && (profileImageUrl.startsWith("http://") || profileImageUrl.startsWith("https://"))) {
+            Glide.with(ivProfile)
+                    .load(profileImageUrl)
+                    .placeholder(R.drawable.ic_profile_default)
+                    .error(R.drawable.ic_profile_default)
+                    .into(ivProfile);
+        }
 
         // 텍스트 영역
         LinearLayout textLayout = new LinearLayout(getContext());
