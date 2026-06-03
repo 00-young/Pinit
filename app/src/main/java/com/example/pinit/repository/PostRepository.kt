@@ -30,6 +30,7 @@ class PostRepository {
                 imageRef.downloadUrl
                     .addOnSuccessListener { uri ->
                         val uploadPost = post.copy(thumbnailImageUrl = uri.toString())
+                        // 썸네일 URL 채운 뒤 Post + blocks 저장 (완료까지 대기)
                         savePostWithBlocks(uploadPost, contentBlocks, onSuccess, onFailure)
                     }
                     .addOnFailureListener { onFailure(it) }
@@ -107,9 +108,24 @@ class PostRepository {
         onFailure: (Exception) -> Unit
     ) {
         val postRef = db.collection("posts").document(post.postId)
+        val searchIndexRef = db.collection("searchIndexPosts").document(post.postId)
         val batch = db.batch()
 
+        // Post 문서
         batch.set(postRef, post)
+
+        val searchIndexData = hashMapOf(
+            "postId" to post.postId,
+            "title" to post.title,
+            "thumbnailImageUrl" to post.thumbnailImageUrl,
+            "postImageUrl" to post.thumbnailImageUrl,
+            "hashtags" to post.hashtags,
+            "userNickname" to post.userNickname,
+            "content" to blocks.joinToString(" ") { it.toString() }
+        )
+
+        batch.set(searchIndexRef, searchIndexData)
+
         for (block in blocks) {
             val blockRef = postRef.collection("contentBlocks").document(block.blockId)
             batch.set(blockRef, block)
