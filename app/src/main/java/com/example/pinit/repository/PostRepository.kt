@@ -112,6 +112,7 @@ class PostRepository {
         val batch = db.batch()
 
         // Post 문서
+        android.util.Log.d("PostSaveTest", "저장될 닉네임 = ${post.userNickname}")
         batch.set(postRef, post)
 
         val searchIndexData = hashMapOf(
@@ -149,6 +150,7 @@ class PostRepository {
         onFailure: (Exception) -> Unit
     ) {
         val postRef = db.collection("posts").document(post.postId)
+        val searchIndexRef = db.collection("searchIndexPosts").document(post.postId)
 
         // 1) 기존 블록 먼저 조회
         postRef.collection("contentBlocks").get()
@@ -165,9 +167,21 @@ class PostRepository {
                     "title" to post.title,
                     "thumbnailImageUrl" to post.thumbnailImageUrl,
                     "postImageType" to post.postImageType,
-                    "visibility" to post.visibility
+                    "visibility" to post.visibility,
+                    "userNickname" to post.userNickname,
                 )
                 batch.update(postRef, updates)
+                val searchIndexData = hashMapOf(
+                    "postId" to post.postId,
+                    "title" to post.title,
+                    "thumbnailImageUrl" to post.thumbnailImageUrl,
+                    "postImageUrl" to post.thumbnailImageUrl,
+                    "hashtags" to post.hashtags,
+                    "userNickname" to post.userNickname,
+                    "content" to blocks.joinToString(" ") { it.toString() }
+                )
+
+                batch.set(searchIndexRef, searchIndexData)
 
                 // 4) 새 블록 쓰기
                 for (block in blocks) {
