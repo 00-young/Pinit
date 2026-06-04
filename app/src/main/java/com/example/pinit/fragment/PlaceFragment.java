@@ -54,6 +54,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -104,7 +105,6 @@ public class PlaceFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         rootView = inflater.inflate(R.layout.fragment_place, container, false);
-
         apiHelper = new PlacesApiHelper();
         dbHelper = new DatabaseHelper(requireContext());
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireContext());
@@ -205,6 +205,7 @@ public class PlaceFragment extends Fragment {
                 FirebaseFirestore.getInstance()
                         .collection("schedules")
                         .whereEqualTo("userId", uid)
+                        .orderBy("createdAt", Query.Direction.DESCENDING)
                         .limit(1)
                         .get()
                         .addOnSuccessListener(query -> {
@@ -397,6 +398,7 @@ public class PlaceFragment extends Fragment {
 
     // 선택된 장소를 해당 여행의 날짜/시간으로 Schedule DB에 저장
     private void addPlaceToSchedule(Map<String, String> place, Trip trip, String date, String time) {
+
         Schedule schedule = new Schedule();
         schedule.setTripId(trip.getId());
         schedule.setTitle(place.getOrDefault("name", ""));
@@ -523,7 +525,6 @@ public class PlaceFragment extends Fragment {
         // =========================
         // 여행 전체(schedule) 업로드
         // =========================
-
         repository.uploadSchedule(
                 scheduleId,
                 userId,
