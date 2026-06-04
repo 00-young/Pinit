@@ -27,6 +27,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.example.pinit.fragment.MyPageFragment; // MyPageFragment 이동을 위해 추가
+
 public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
 
     private final List<Post> allPosts = new ArrayList<>();
@@ -144,11 +147,27 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
 
         holder.tagGroup.removeAllViews();
 
-        View.OnClickListener profileClickListener = v ->
-                openOtherProfile(
-                        v,
-                        post.getUserNickname()
-                );
+        View.OnClickListener profileClickListener = v -> {
+            // 현재 로그인한 내 UID 가져오기
+            String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
+                    FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
+
+            androidx.appcompat.app.AppCompatActivity activity =
+                    (androidx.appcompat.app.AppCompatActivity) v.getContext();
+
+            // 내 게시물인지 확인 (내 UID와 게시물 작성자 UID가 같은지 비교)
+            if (post.getUserId() != null && post.getUserId().equals(currentUid)) {
+                // 내 게시물이면 MyPageFragment로 이동
+                activity.getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.fragmentContainer, new MyPageFragment())
+                        .addToBackStack(null)
+                        .commit();
+            } else {
+                //남의 게시물이면 OtherMyPageFragment로 이동
+                openOtherProfile(v, post.getUserNickname());
+            }
+        };
 
         holder.profileImage.setOnClickListener(profileClickListener);
         holder.userName.setOnClickListener(profileClickListener);
