@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -14,8 +15,10 @@ import com.example.pinit.R;
 import com.example.pinit.fragment.OtherMyPageFragment;
 import com.example.pinit.fragment.PostDetailFragment;
 import com.example.pinit.model.post.Post;
+import com.bumptech.glide.Glide;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -23,6 +26,9 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+
+import com.google.firebase.auth.FirebaseAuth;
+import com.example.pinit.fragment.MyPageFragment; // MyPageFragment 이동을 위해 추가
 
 public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
 
@@ -115,6 +121,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
 
         holder.userName.setText(post.getUserNickname());
         holder.postTitle.setText(post.getTitle());
+        loadProfileImage(holder.profileImage, post.getUserEmail());
 
         if (post.getCreatedAt() != null) {
             String formattedDate =
@@ -140,11 +147,27 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
 
         holder.tagGroup.removeAllViews();
 
-        View.OnClickListener profileClickListener = v ->
-                openOtherProfile(
-                        v,
-                        post.getUserNickname()
-                );
+        View.OnClickListener profileClickListener = v -> {
+            // 현재 로그인한 내 UID 가져오기
+            String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
+                    FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
+
+            androidx.appcompat.app.AppCompatActivity activity =
+                    (androidx.appcompat.app.AppCompatActivity) v.getContext();
+
+            // 내 게시물인지 확인 (내 UID와 게시물 작성자 UID가 같은지 비교)
+            if (post.getUserId() != null && post.getUserId().equals(currentUid)) {
+                // 내 게시물이면 MyPageFragment로 이동
+                activity.getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.fragmentContainer, new MyPageFragment())
+                        .addToBackStack(null)
+                        .commit();
+            } else {
+                //남의 게시물이면 OtherMyPageFragment로 이동
+                openOtherProfile(v, post.getUserNickname());
+            }
+        };
 
         holder.profileImage.setOnClickListener(profileClickListener);
         holder.userName.setOnClickListener(profileClickListener);
@@ -224,9 +247,30 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
                 .commit();
     }
 
+    private void loadProfileImage(ImageView imageView, String email) {
+        imageView.setImageResource(R.drawable.bg_profile_avatar);
+        if (email == null || email.isEmpty()) return;
+
+        FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(email)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    String imageUrl = snapshot.getString("profileImageUrl");
+                    if (imageUrl != null
+                            && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+                        Glide.with(imageView)
+                                .load(imageUrl)
+                                .placeholder(R.drawable.bg_profile_avatar)
+                                .error(R.drawable.bg_profile_avatar)
+                                .into(imageView);
+                    }
+                });
+    }
+
     public static class ViewHolder extends RecyclerView.ViewHolder {
 
-        View profileImage;
+        ImageView profileImage;
         TextView userName;
         TextView postTitle;
         ChipGroup tagGroup;

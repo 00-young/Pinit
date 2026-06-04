@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -16,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
 import com.example.pinit.model.post.Post;
+import com.bumptech.glide.Glide;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.auth.FirebaseAuth;
@@ -143,6 +145,7 @@ public class MyScrapFragment extends Fragment {
             Post post = posts.get(position);
             holder.userName.setText(post.getUserNickname());
             holder.postTitle.setText(post.getTitle());
+            loadProfileImage(holder.profileImage, post.getUserEmail());
 
             if (post.getCreatedAt() != null) {
                 String formattedDate = new java.text.SimpleDateFormat("yyyy. MM. dd", java.util.Locale.KOREA)
@@ -182,6 +185,7 @@ public class MyScrapFragment extends Fragment {
         }
 
         private static class ViewHolder extends RecyclerView.ViewHolder {
+            ImageView profileImage;
             TextView userName;
             TextView postTitle;
             TextView tvCommentCount;
@@ -191,6 +195,7 @@ public class MyScrapFragment extends Fragment {
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
+                profileImage = itemView.findViewById(R.id.profileImage);
                 userName = itemView.findViewById(R.id.userName);
                 postTitle = itemView.findViewById(R.id.postTitle);
                 tvCommentCount = itemView.findViewById(R.id.tvCommentCount);
@@ -198,6 +203,27 @@ public class MyScrapFragment extends Fragment {
                 tvPostDate = itemView.findViewById(R.id.tvPostDate);
                 tagGroup = itemView.findViewById(R.id.postTagGroup);
             }
+        }
+
+        private void loadProfileImage(ImageView imageView, String email) {
+            imageView.setImageResource(R.drawable.bg_profile_avatar);
+            if (email == null || email.isEmpty()) return;
+
+            FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(email)
+                    .get()
+                    .addOnSuccessListener(snapshot -> {
+                        String imageUrl = snapshot.getString("profileImageUrl");
+                        if (imageUrl != null
+                                && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+                            Glide.with(imageView)
+                                    .load(imageUrl)
+                                    .placeholder(R.drawable.bg_profile_avatar)
+                                    .error(R.drawable.bg_profile_avatar)
+                                    .into(imageView);
+                        }
+                    });
         }
     }
 }
