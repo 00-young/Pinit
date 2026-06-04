@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -14,8 +15,10 @@ import com.example.pinit.R;
 import com.example.pinit.fragment.OtherMyPageFragment;
 import com.example.pinit.fragment.PostDetailFragment;
 import com.example.pinit.model.post.Post;
+import com.bumptech.glide.Glide;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -115,6 +118,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
 
         holder.userName.setText(post.getUserNickname());
         holder.postTitle.setText(post.getTitle());
+        loadProfileImage(holder.profileImage, post.getUserEmail());
 
         if (post.getCreatedAt() != null) {
             String formattedDate =
@@ -224,9 +228,30 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
                 .commit();
     }
 
+    private void loadProfileImage(ImageView imageView, String email) {
+        imageView.setImageResource(R.drawable.bg_profile_avatar);
+        if (email == null || email.isEmpty()) return;
+
+        FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(email)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    String imageUrl = snapshot.getString("profileImageUrl");
+                    if (imageUrl != null
+                            && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+                        Glide.with(imageView)
+                                .load(imageUrl)
+                                .placeholder(R.drawable.bg_profile_avatar)
+                                .error(R.drawable.bg_profile_avatar)
+                                .into(imageView);
+                    }
+                });
+    }
+
     public static class ViewHolder extends RecyclerView.ViewHolder {
 
-        View profileImage;
+        ImageView profileImage;
         TextView userName;
         TextView postTitle;
         ChipGroup tagGroup;

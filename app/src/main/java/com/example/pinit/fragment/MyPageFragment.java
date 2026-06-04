@@ -28,6 +28,7 @@ import com.example.pinit.R;
 import com.example.pinit.data.MyFollow;
 import com.example.pinit.model.User;
 import com.example.pinit.model.post.Post;
+import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FieldValue;
@@ -35,6 +36,8 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
@@ -193,15 +196,15 @@ public class MyPageFragment extends Fragment {
         profileBio.setText(currentUser.getBio());
 
         String avatarUrl = currentUser.getProfileImageUrl();
-        if (avatarUrl == null || avatarUrl.isEmpty()) {
+        if (!isRemoteImageUrl(avatarUrl)) {
             // Using a placeholder or existing drawable if available
             profileAvatar.setImageResource(R.drawable.bg_profile_avatar);
         } else {
-            try {
-                profileAvatar.setImageURI(Uri.parse(avatarUrl));
-            } catch (Exception e) {
-                // Handle image loading error
-            }
+            Glide.with(requireContext())
+                    .load(avatarUrl)
+                    .placeholder(R.drawable.bg_profile_avatar)
+                    .error(R.drawable.bg_profile_avatar)
+                    .into(profileAvatar);
         }
 
         // 💡 프로필 갱신 시 포스트 목록도 최신 상태(닉네임 등)로 유지하고 싶다면 다시 로드 가능
@@ -224,9 +227,15 @@ public class MyPageFragment extends Fragment {
         editBio.setText(currentUser.getBio());
 
         String currentAvatar = currentUser.getProfileImageUrl();
-        pendingAvatarUri = (currentAvatar == null || currentAvatar.isEmpty()) ? null : Uri.parse(currentAvatar);
-        if (pendingAvatarUri != null) {
-            dialogAvatarPreview.setImageURI(pendingAvatarUri);
+        pendingAvatarUri = null;
+        if (isRemoteImageUrl(currentAvatar)) {
+            Glide.with(requireContext())
+                    .load(currentAvatar)
+                    .placeholder(R.drawable.bg_profile_avatar)
+                    .error(R.drawable.bg_profile_avatar)
+                    .into(dialogAvatarPreview);
+        } else {
+            dialogAvatarPreview.setImageResource(R.drawable.bg_profile_avatar);
         }
 
         chooseImage.setOnClickListener(v -> profileImageLauncher.launch(new String[]{"image/*"}));
@@ -251,11 +260,7 @@ public class MyPageFragment extends Fragment {
                     updates.put("bio", newBio);
                     updates.put("updatedAt", FieldValue.serverTimestamp());
                     
-                    if (pendingAvatarUri != null) {
-                        updates.put("profileImageUrl", pendingAvatarUri.toString());
-                    }
-
-                    userRef.update(updates)
+                    saveProfile(userRef, updates)
                             .addOnSuccessListener(aVoid -> {
                                 Toast.makeText(getContext(), "프로필이 수정되었습니다.", Toast.LENGTH_SHORT).show();
                                 clearDialogState();
@@ -271,6 +276,44 @@ public class MyPageFragment extends Fragment {
     private void clearDialogState() {
         pendingAvatarUri = null;
         dialogAvatarPreview = null;
+    }
+
+    private boolean isRemoteImageUrl(String imageUrl) {
+        return imageUrl != null
+                && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"));
+    }
+
+    private com.google.android.gms.tasks.Task<Void> saveProfile(
+            DocumentReference userRef,
+            java.util.Map<String, Object> updates
+    ) {
+        if (pendingAvatarUri == null) {
+            return userRef.update(updates);
+        }
+        if (currentUser == null || currentUser.getEmail() == null) {
+            return userRef.update(updates);
+        }
+
+        String safeEmail = currentUser.getEmail().replaceAll("[^A-Za-z0-9._-]", "_");
+        StorageReference imageRef = FirebaseStorage.getInstance()
+                .getReference()
+                .child("users/profileImages/" + safeEmail + ".jpg");
+
+        return imageRef.putFile(pendingAvatarUri)
+                .continueWithTask(task -> {
+                    if (!task.isSuccessful() && task.getException() != null) {
+                        throw task.getException();
+                    }
+                    return imageRef.getDownloadUrl();
+                })
+                .continueWithTask(task -> {
+                    if (!task.isSuccessful() && task.getException() != null) {
+                        throw task.getException();
+                    }
+                    Uri downloadUri = task.getResult();
+                    updates.put("profileImageUrl", downloadUri.toString());
+                    return userRef.update(updates);
+                });
     }
 
     private static class MyPostAdapter extends RecyclerView.Adapter<MyPostAdapter.ViewHolder> {
@@ -298,6 +341,7 @@ public class MyPageFragment extends Fragment {
             Post post = posts.get(position);
             holder.userName.setText(post.getUserNickname());
             holder.postTitle.setText(post.getTitle());
+            loadProfileImage(holder.profileImage, post.getUserEmail());
             
             if (post.getCreatedAt() != null) {
                 String formattedDate = new java.text.SimpleDateFormat("yyyy. MM. dd", java.util.Locale.KOREA)
@@ -337,6 +381,7 @@ public class MyPageFragment extends Fragment {
         }
 
         private static class ViewHolder extends RecyclerView.ViewHolder {
+            ImageView profileImage;
             TextView userName;
             TextView postTitle;
             TextView tvCommentCount;
@@ -346,6 +391,7 @@ public class MyPageFragment extends Fragment {
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
+                profileImage = itemView.findViewById(R.id.profileImage);
                 userName = itemView.findViewById(R.id.userName);
                 postTitle = itemView.findViewById(R.id.postTitle);
                 tvCommentCount = itemView.findViewById(R.id.tvCommentCount);
@@ -353,6 +399,27 @@ public class MyPageFragment extends Fragment {
                 tvPostDate = itemView.findViewById(R.id.tvPostDate);
                 tagGroup = itemView.findViewById(R.id.postTagGroup);
             }
+        }
+
+        private void loadProfileImage(ImageView imageView, String email) {
+            imageView.setImageResource(R.drawable.bg_profile_avatar);
+            if (email == null || email.isEmpty()) return;
+
+            FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(email)
+                    .get()
+                    .addOnSuccessListener(snapshot -> {
+                        String imageUrl = snapshot.getString("profileImageUrl");
+                        if (imageUrl != null
+                                && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+                            Glide.with(imageView)
+                                    .load(imageUrl)
+                                    .placeholder(R.drawable.bg_profile_avatar)
+                                    .error(R.drawable.bg_profile_avatar)
+                                    .into(imageView);
+                        }
+                    });
         }
     }
 
