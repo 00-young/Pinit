@@ -90,11 +90,13 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <View
+                    <ImageView
+                        android:id="@+id/authorProfileImage"
                         android:layout_width="24dp"
                         android:layout_height="24dp"
                         android:layout_marginEnd="8dp"
-                        android:background="#000000" />
+                        android:background="@drawable/bg_profile_avatar"
+                        android:scaleType="centerCrop" />
 
                     <TextView
                         android:id="@+id/tvAuthorName"
