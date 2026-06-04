@@ -318,15 +318,23 @@ public class FeedFragment extends Fragment {
         String filterStartDate = null;
         String filterEndDate = null;
 
+        // 핵심 수정: "가족", "혼자" 등의 글자를 파이어베이스의 숫자 필드와 맞추기 위한 번역 로직 추가
         for (String tag : travelSettingTags) {
             if (tag.contains("명")) {
                 try { travelerCount = Long.parseLong(tag.replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
-            } else if (tag.contains("~")) {
+            } else if (tag.equals("혼자")) {
+                travelerCount = 1L; // "혼자"는 1명으로 검색
+            } else if (tag.equals("가족") || tag.contains("가족")) {
+                travelerCount = 0L; // CreatePostFragment에서 "가족"을 0으로 저장하므로 0으로 검색
+            } else if (tag.contains("~") && tag.matches(".*\\d{4}-\\d{2}-\\d{2}.*")) {
+                // 날짜 포맷일 경우에만 시작/종료일로 분리
                 String[] parts = tag.split("~");
-                filterStartDate = parts[0].trim().replace("/", "-");
-                filterEndDate = parts[1].trim().replace("/", "-");
+                if(parts.length >= 2) {
+                    filterStartDate = parts[0].trim().replace("/", "-");
+                    filterEndDate = parts[1].trim().replace("/", "-");
+                }
             } else {
-                location = tag;
+                location = tag; // 나머지는 장소로 취급
             }
         }
 
@@ -349,15 +357,15 @@ public class FeedFragment extends Fragment {
                         return kotlin.Unit.INSTANCE;
                     }
 
+                    // 검색 결과가 많을 수 있으므로 최대 10개만 먼저 가져옴
                     List<String> safePostIds = postIds.size() > 10 ? postIds.subList(0, 10) : postIds;
 
                     FirebaseFirestore.getInstance().collection("posts")
-                            .whereIn(com.google.firebase.firestore.FieldPath.documentId(), safePostIds)
+                            .whereIn(FieldPath.documentId(), safePostIds)
                             .get()
                             .addOnSuccessListener(querySnapshot -> {
                                 postList.clear();
 
-                                // 여기서도 하나씩 꺼내서 ID를 주입합니다
                                 for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                                     Post post = doc.toObject(Post.class);
                                     if (post != null) {
@@ -366,7 +374,6 @@ public class FeedFragment extends Fragment {
                                             continue;
                                         }
                                         try {
-                                            // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
                                             java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
                                             field.setAccessible(true);
                                             field.set(post, doc.getId());
