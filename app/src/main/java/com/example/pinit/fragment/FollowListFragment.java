@@ -13,12 +13,12 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.pinit.R;
-import com.example.pinit.manager.FirebaseManager;
-import com.example.pinit.model.User;
 import com.bumptech.glide.Glide;
+import com.example.pinit.R;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 
@@ -72,7 +72,7 @@ public class FollowListFragment extends Fragment {
         Bundle args = getArguments();
         mode = (args != null) ? args.getString(ARG_MODE, MODE_FOLLOWERS) : MODE_FOLLOWERS;
         userEmail = (args != null) ? args.getString(ARG_USER_EMAIL) : null;
-        
+
         if (userEmail == null && FirebaseAuth.getInstance().getCurrentUser() != null) {
             userEmail = FirebaseAuth.getInstance().getCurrentUser().getEmail();
         }
@@ -96,6 +96,8 @@ public class FollowListFragment extends Fragment {
         if (userEmail == null) return;
 
         FirebaseFirestore db = FirebaseFirestore.getInstance();
+
+        // 파이어베이스 DB 구조에 맞게 "follows" 사용
         String subCollection = MODE_FOLLOWING.equals(mode) ? "follows" : "followers";
 
         followListener = db.collection("users").document(userEmail).collection(subCollection)
@@ -111,14 +113,16 @@ public class FollowListFragment extends Fragment {
                     java.util.concurrent.atomic.AtomicInteger count = new java.util.concurrent.atomic.AtomicInteger(snapshots.size());
 
                     for (DocumentSnapshot doc : snapshots.getDocuments()) {
-                        String userEmail = doc.getId();
-                        db.collection("users").document(userEmail).get()
+                        String fetchedEmail = doc.getId();
+                        db.collection("users").document(fetchedEmail).get()
                                 .addOnSuccessListener(userDoc -> {
                                     if (userDoc.exists()) {
-                                        User user = userDoc.toObject(User.class);
-                                        if (user != null) {
-                                            users.add(new FollowUser(user.getEmail(), user.getNickname(), user.getBio(), user.getProfileImageUrl()));
-                                        }
+                                        // 수정 부분: toObject()를 쓰지 않고 필요한 것만 직접 빼냅니다(튕김 방지)
+                                        String nickname = userDoc.getString("nickname");
+                                        String bio = userDoc.getString("bio");
+                                        String profileImageUrl = userDoc.getString("profileImageUrl");
+
+                                        users.add(new FollowUser(userDoc.getId(), nickname, bio, profileImageUrl));
                                     }
                                     if (count.decrementAndGet() == 0) {
                                         updateUI(users);
@@ -163,7 +167,7 @@ public class FollowListFragment extends Fragment {
         void updateUsers(List<FollowUser> newUsers) {
             users.clear();
             users.addAll(newUsers);
-            notifyDataSetChanged(); // 실시간 리스너 갱신 시 완전히 도화지를 새로 그림
+            notifyDataSetChanged();
         }
 
         @NonNull
@@ -176,11 +180,11 @@ public class FollowListFragment extends Fragment {
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             FollowUser user = users.get(position);
-            holder.name.setText(user.name);
-            holder.bio.setText(user.bio);
-            if (user.profileImageUrl != null
-                    && (user.profileImageUrl.startsWith("http://") || user.profileImageUrl.startsWith("https://"))) {
-                Glide.with(holder.avatar)
+            holder.name.setText(user.name != null ? user.name : "알 수 없음");
+            holder.bio.setText(user.bio != null ? user.bio : "");
+
+            if (user.profileImageUrl != null && (user.profileImageUrl.startsWith("http://") || user.profileImageUrl.startsWith("https://"))) {
+                Glide.with(holder.itemView.getContext())
                         .load(user.profileImageUrl)
                         .placeholder(R.drawable.bg_profile_avatar)
                         .error(R.drawable.bg_profile_avatar)
@@ -189,16 +193,10 @@ public class FollowListFragment extends Fragment {
                 holder.avatar.setImageResource(R.drawable.bg_profile_avatar);
             }
 
-            // 버튼 상태 초기화 보장
-            FirebaseManager.getInstance().checkFollowing(user.userId, isFollowing -> {
-                holder.actionButton.setText(isFollowing ? "언팔로우하기" : "팔로우하기");
-            });
-
             View.OnClickListener openProfile = v -> {
-                androidx.appcompat.app.AppCompatActivity activity =
-                        (androidx.appcompat.app.AppCompatActivity) v.getContext();
+                androidx.appcompat.app.AppCompatActivity activity = (androidx.appcompat.app.AppCompatActivity) v.getContext();
                 activity.getSupportFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(user.userId))
+                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance(user.name)) // 닉네임 사용
                         .addToBackStack(null)
                         .commit();
             };
@@ -206,41 +204,40 @@ public class FollowListFragment extends Fragment {
             holder.name.setOnClickListener(openProfile);
             holder.bio.setOnClickListener(openProfile);
 
-            holder.actionButton.setOnClickListener(v -> {
-                int pos = holder.getBindingAdapterPosition();
-                if (pos == RecyclerView.NO_POSITION) return;
+            FirebaseAuth auth = FirebaseAuth.getInstance();
+            if (auth.getCurrentUser() == null) return;
+            String myEmail = auth.getCurrentUser().getEmail();
+            FirebaseFirestore db = FirebaseFirestore.getInstance();
 
-                // 클릭 연타 및 타임 지연 방지를 위해 버튼을 우선 비활성화
-                holder.actionButton.setEnabled(false);
+            DocumentReference myFollowingRef = db.collection("users").document(myEmail).collection("follows").document(user.userId);
+            DocumentReference otherFollowerRef = db.collection("users").document(user.userId).collection("followers").document(myEmail);
 
-                FirebaseManager.getInstance().checkFollowing(user.userId, isFollowing -> {
-                    if (isFollowing) {
-                        FirebaseManager.getInstance().unfollowUser(user.userId, new FirebaseManager.OnActionListener() {
-                            @Override
-                            public void onSuccess() {
-                                // 🛠️ 버그 완전 저격 수술 핵심 구역
-                                // 팔로잉 탭이든 아니든 로컬에서 리스트를 수동으로 자르지 마세요!
-                                // 서버 데이터가 지워지면 상단의 실시간 addSnapshotListener가 감지하여
-                                // 알아서 부드럽게 UI를 새로 리로드 해줍니다. 버튼을 다시 활성화만 시킵니다.
-                                holder.actionButton.setEnabled(true);
-                            }
-                            @Override
-                            public void onFailure(Exception e) {
-                                holder.actionButton.setEnabled(true);
-                            }
-                        });
+            myFollowingRef.get().addOnSuccessListener(doc -> {
+                boolean isFollowing = doc.exists();
+                holder.actionButton.setText(isFollowing ? "언팔로우" : "팔로우");
+
+                holder.actionButton.setOnClickListener(v -> {
+                    holder.actionButton.setEnabled(false);
+
+                    if (holder.actionButton.getText().toString().equals("언팔로우")) {
+                        myFollowingRef.delete();
+                        otherFollowerRef.delete();
+                        db.collection("users").document(myEmail).update("followingCount", FieldValue.increment(-1));
+                        db.collection("users").document(user.userId).update("followerCount", FieldValue.increment(-1));
+
+                        holder.actionButton.setText("팔로우");
+                        holder.actionButton.setEnabled(true);
                     } else {
-                        FirebaseManager.getInstance().followUser(user.userId, new FirebaseManager.OnActionListener() {
-                            @Override
-                            public void onSuccess() {
-                                holder.actionButton.setEnabled(true);
-                                holder.actionButton.setText("언팔로우하기");
-                            }
-                            @Override
-                            public void onFailure(Exception e) {
-                                holder.actionButton.setEnabled(true);
-                            }
-                        });
+                        java.util.Map<String, Object> data = new java.util.HashMap<>();
+                        data.put("timestamp", com.google.firebase.Timestamp.now());
+
+                        myFollowingRef.set(data);
+                        otherFollowerRef.set(data);
+                        db.collection("users").document(myEmail).update("followingCount", FieldValue.increment(1));
+                        db.collection("users").document(user.userId).update("followerCount", FieldValue.increment(1));
+
+                        holder.actionButton.setText("언팔로우");
+                        holder.actionButton.setEnabled(true);
                     }
                 });
             });

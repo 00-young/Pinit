@@ -229,10 +229,23 @@ public class PostDetailFragment extends Fragment {
         View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
         if (authorRow != null) {
             authorRow.setOnClickListener(v -> {
-                getParentFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(post.getUserId()))
-                        .addToBackStack(null)
-                        .commit();
+                // 현재 로그인한 내 UID 가져오기
+                String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
+                        FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
+
+                // 내 UID와 게시물 작성자 UID 비교
+                if (post.getUserId() != null && post.getUserId().equals(currentUid)) {
+                    // 내 게시물이면 MyPageFragment로 이동
+                    getParentFragmentManager().beginTransaction()
+                            .replace(R.id.fragmentContainer, new MyPageFragment())
+                            .addToBackStack(null)
+                            .commit();
+                } else {
+                    // 남의 게시물이면 기존대로 OtherMyPageFragment로 이동
+                    getParentFragmentManager().beginTransaction()
+                            .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance(post.getUserNickname()))
+                            .addToBackStack(null).commit();
+                }
             });
         }
 
