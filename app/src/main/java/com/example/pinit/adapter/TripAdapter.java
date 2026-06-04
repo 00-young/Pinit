@@ -81,6 +81,19 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
             context.startActivity(intent);
         });
 
+        // 여행 수정
+        holder.btnEditTrip.setOnClickListener(v -> {
+
+            Intent intent =
+                    new Intent(context,
+                            TripDetailActivity.class);
+
+            intent.putExtra("trip_id", t.getId());
+            intent.putExtra("open_edit", true);
+
+            context.startActivity(intent);
+        });
+
         // 여행요약 → TripSummaryActivity (★ 변경)
         holder.btnSummary.setOnClickListener(v -> {
             Intent intent = new Intent(context, TripSummaryActivity.class);
@@ -109,7 +122,7 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         TextView tvTitle, tvDestination, tvDate, tvBudget, tvDday;
-        Button btnDetail, btnSummary;
+        Button btnDetail, btnEditTrip, btnSummary;
 
         ViewHolder(View view) {
             super(view);
@@ -119,6 +132,7 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
             tvBudget = view.findViewById(R.id.tvBudget);
             tvDday = view.findViewById(R.id.tvDday);
             btnDetail = view.findViewById(R.id.btnDetail);
+            btnEditTrip = view.findViewById(R.id.btnEditTrip);
             btnSummary = view.findViewById(R.id.btnSummary);
         }
     }
