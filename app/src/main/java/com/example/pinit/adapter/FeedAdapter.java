@@ -176,7 +176,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.ViewHolder> {
         if (hashtags != null) {
             for (String tag : hashtags) {
                 Chip chip = new Chip(holder.itemView.getContext());
-                chip.setText(tag);
+                chip.setText(tag.startsWith("#") ? tag : "#" + tag);
                 chip.setTextColor(Color.rgb(34, 34, 34));
                 chip.setTextSize(14);
                 chip.setChipBackgroundColor(ColorStateList.valueOf(Color.rgb(255, 248, 232)));

@@ -338,10 +338,16 @@ public class FeedFragment extends Fragment {
             }
         }
 
+        // 핵심 수정: 파이어베이스 DB에는 '#' 기호 없이 저장되어 있으므로 '#'을 제거하고 검색해야 합니다
+        List<String> cleanTags = new ArrayList<>();
+        for (String tag : selectedTags) {
+            cleanTags.add(tag.replace("#", "")); // "#아이와 함께" -> "아이와 함께" 로 변환
+        }
+
         SearchRepository repository = new SearchRepository();
         repository.search(
                 keyword, travelerCount, location, null, null, filterStartDate, filterEndDate,
-                new ArrayList<>(selectedTags),
+                cleanTags, // 여기에 기존의 new ArrayList<>(selectedTags) 대신 cleanTags를 넣습니다
                 searchIndices -> {
                     List<String> postIds = new ArrayList<>();
                     for (SearchIndex index : searchIndices) {
@@ -353,11 +359,10 @@ public class FeedFragment extends Fragment {
                     if (postIds.isEmpty()) {
                         postList.clear();
                         adapter.updatePosts(postList);
-                        checkEmptyState(); // 추가
+                        checkEmptyState();
                         return kotlin.Unit.INSTANCE;
                     }
 
-                    // 검색 결과가 많을 수 있으므로 최대 10개만 먼저 가져옴
                     List<String> safePostIds = postIds.size() > 10 ? postIds.subList(0, 10) : postIds;
 
                     FirebaseFirestore.getInstance().collection("posts")
@@ -369,7 +374,6 @@ public class FeedFragment extends Fragment {
                                 for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                                     Post post = doc.toObject(Post.class);
                                     if (post != null) {
-                                        // 비공개 글은 검색 결과에서 제외 (전체공개만)
                                         if (!"public".equals(post.getVisibility())) {
                                             continue;
                                         }
@@ -386,7 +390,7 @@ public class FeedFragment extends Fragment {
 
                                 adapter.updatePosts(postList);
                                 adapter.sortPostsByLatest();
-                                checkEmptyState(); // 추가
+                                checkEmptyState();
                             });
                     return kotlin.Unit.INSTANCE;
                 }
