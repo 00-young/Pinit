@@ -11,6 +11,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.PopupMenu;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -19,7 +20,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
-import com.example.pinit.SearchIndex;
+import com.example.pinit.index.SearchIndex;
 import com.example.pinit.SearchRepository;
 import com.example.pinit.activity.PostSearchActivity;
 import com.example.pinit.adapter.FeedAdapter;
@@ -47,10 +48,10 @@ public class FeedFragment extends Fragment {
     private HorizontalScrollView resultTagScroller;
     private ChipGroup resultTagContainer;
     private Button btnSort;
+    private TextView tvEmptyFeed;
 
     private final Set<String> selectedTags = new LinkedHashSet<>();
     private final List<String> travelSettingTags = new ArrayList<>();
-
     private final String[] knownTags = {
             "#아이와 함께", "#부모님과 함께", "#친구와 함께",
             "#가족들과 함께", "#신혼여행 맞춤", "#커플 여행",
@@ -86,6 +87,7 @@ public class FeedFragment extends Fragment {
         resultTagScroller = view.findViewById(R.id.resultTagScroller);
         resultTagContainer = view.findViewById(R.id.resultTagContainer);
         btnSort = view.findViewById(R.id.btnSort);
+        tvEmptyFeed = view.findViewById(R.id.tvEmptyFeed);
 
         btnSort.setOnClickListener(v -> {
             PopupMenu popup = new PopupMenu(getContext(), btnSort);
@@ -222,34 +224,88 @@ public class FeedFragment extends Fragment {
         }
     }
 
-    // 트랙 1: 홈 피드 불러오기 (임시: 전체 게시물 최신순)
+    // 트랙 1: 홈 피드 = 본인 + 팔로우한 사람들의 글 (전체공개, 1달 이내, 최신순)
     private void loadHomeFeed() {
+        com.google.firebase.auth.FirebaseUser currentUser =
+                FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null || currentUser.getEmail() == null) {
+            postList.clear();
+            adapter.updatePosts(postList);
+            checkEmptyState(); // 추가
+            return;
+        }
+        String myEmail = currentUser.getEmail();
+
+        // 1) 내 follows 목록(이메일) 읽기 → 본인 이메일 추가
+        FirebaseFirestore.getInstance()
+                .collection("users").document(myEmail)
+                .collection("follows")
+                .get()
+                .addOnSuccessListener(followSnap -> {
+                    List<String> emails = new ArrayList<>();
+                    emails.add(myEmail); // 본인 글 포함
+                    for (DocumentSnapshot d : followSnap.getDocuments()) {
+                        emails.add(d.getId()); // follows 문서 ID = 팔로우 대상 이메일
+                    }
+
+                    // whereIn 은 최대 30개. 초과 시 앞에서 30개만.
+                    if (emails.size() > 30) {
+                        emails = emails.subList(0, 30);
+                    }
+
+                    fetchFeedPosts(emails);
+                })
+                .addOnFailureListener(e -> {
+                    // follows 조회 실패 시 최소한 본인 글이라도
+                    List<String> onlyMe = new ArrayList<>();
+                    onlyMe.add(myEmail);
+                    fetchFeedPosts(onlyMe);
+                });
+    }
+
+    // 본인+팔로우 이메일 목록으로 posts 조회 → 1달 이내 공개글만 최신순
+    private void fetchFeedPosts(List<String> emails) {
+        if (emails.isEmpty()) {
+            postList.clear();
+            adapter.updatePosts(postList);
+            checkEmptyState(); // 추가
+            return;
+        }
+
+        // 1달 전 시각
+        long oneMonthAgoMillis = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000);
+
         FirebaseFirestore.getInstance().collection("posts")
-                .orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(20) // 일단 최신 글 20개만 가져오기
+                .whereIn("userEmail", emails)
+                .whereEqualTo("visibility", "public") // 전체공개만
                 .get()
                 .addOnSuccessListener(postSnapshots -> {
                     postList.clear();
 
-                    // 통째로 변환하지 않고, 하나씩 꺼내서 ID를 주입
                     for (DocumentSnapshot doc : postSnapshots.getDocuments()) {
                         Post post = doc.toObject(Post.class);
-                        if (post != null) {
-                            try {
-                                // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
-                                java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
-                                field.setAccessible(true);
-                                field.set(post, doc.getId());
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                            postList.add(post);
+                        if (post == null) continue;
+
+                        // 1달 이내 글만 (클라이언트 필터)
+                        if (post.getCreatedAt() == null) continue;
+                        long createdMillis = post.getCreatedAt().toDate().getTime();
+                        if (createdMillis < oneMonthAgoMillis) continue;
+
+                        try {
+                            java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
+                            field.setAccessible(true);
+                            field.set(post, doc.getId());
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
+                        postList.add(post);
                     }
 
                     adapter.updatePosts(postList);
-                    adapter.sortPostsByLatest();
-                });
+                    adapter.sortPostsByLatest(); // 최신순 정렬
+                    checkEmptyState(); // 추가
+                })
+                .addOnFailureListener(Throwable::printStackTrace);
     }
 
     // 트랙 2: 검색 결과 불러오기 (전체 유저 대상)
@@ -289,6 +345,7 @@ public class FeedFragment extends Fragment {
                     if (postIds.isEmpty()) {
                         postList.clear();
                         adapter.updatePosts(postList);
+                        checkEmptyState(); // 추가
                         return kotlin.Unit.INSTANCE;
                     }
 
@@ -304,6 +361,10 @@ public class FeedFragment extends Fragment {
                                 for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                                     Post post = doc.toObject(Post.class);
                                     if (post != null) {
+                                        // 비공개 글은 검색 결과에서 제외 (전체공개만)
+                                        if (!"public".equals(post.getVisibility())) {
+                                            continue;
+                                        }
                                         try {
                                             // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
                                             java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
@@ -318,9 +379,30 @@ public class FeedFragment extends Fragment {
 
                                 adapter.updatePosts(postList);
                                 adapter.sortPostsByLatest();
+                                checkEmptyState(); // 추가
                             });
                     return kotlin.Unit.INSTANCE;
                 }
         );
+    }
+    // 3. 빈 화면 상태를 업데이트하는 헬퍼 메서드 추가
+    private void checkEmptyState() {
+        if (postList.isEmpty()) {
+            String keyword = searchEditText.getText().toString().trim();
+            boolean isSearchMode = !keyword.isEmpty() || !selectedTags.isEmpty() || !travelSettingTags.isEmpty();
+
+            // 검색 모드일 때와 홈 피드일 때의 문구 분리
+            if (isSearchMode) {
+                tvEmptyFeed.setText("검색 결과가 없습니다.");
+            } else {
+                tvEmptyFeed.setText("팔로우를 통해 게시물을 업데이트 받아보세요!");
+            }
+
+            tvEmptyFeed.setVisibility(View.VISIBLE);
+            recyclerView.setVisibility(View.GONE);
+        } else {
+            tvEmptyFeed.setVisibility(View.GONE);
+            recyclerView.setVisibility(View.VISIBLE);
+        }
     }
 }

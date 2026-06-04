@@ -27,6 +27,7 @@ import com.example.pinit.model.post.Post;
 import com.example.pinit.adapter.ContentBlockAdapter;
 import com.example.pinit.model.post.ContentBlock;
 
+import com.bumptech.glide.Glide;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.Timestamp;
@@ -45,7 +46,9 @@ public class PostDetailFragment extends Fragment {
     private String postId;
     private TextView tvPostTitle;
     private TextView tvAuthorName;
+    private ImageView authorProfileImage;
     private TextView tvPostDate;
+    private TextView tvViewCount;
 
     // 추가됨: 수정, 삭제 버튼 변수
     private TextView btnEditPost;
@@ -94,7 +97,9 @@ public class PostDetailFragment extends Fragment {
 
         tvPostTitle = view.findViewById(R.id.tvPostTitle);
         tvAuthorName = view.findViewById(R.id.tvAuthorName);
+        authorProfileImage = view.findViewById(R.id.authorProfileImage);
         tvPostDate = view.findViewById(R.id.tvPostDate);
+        tvViewCount = view.findViewById(R.id.tvViewCount); // 레이아웃에 없으면 null (방어 처리됨)
 
         // 추가됨: 버튼 바인딩
         btnEditPost = view.findViewById(R.id.btnEditPost);
@@ -166,12 +171,30 @@ public class PostDetailFragment extends Fragment {
             if (!documentSnapshot.exists()) return;
             Post post = documentSnapshot.toObject(Post.class);
             if (post == null) return;
+
+            // 비공개 글은 작성자만 열람 가능
+            String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null
+                    ? FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
+            boolean isPrivate = "private".equals(post.getVisibility());
+            boolean isAuthor = post.getUserId() != null && post.getUserId().equals(currentUid);
+            if (isPrivate && !isAuthor) {
+                Toast.makeText(getContext(), "비공개 게시물입니다.", Toast.LENGTH_SHORT).show();
+                getParentFragmentManager().popBackStack();
+                return;
+            }
+
             bindPostData(post);
         });
     }
 
     private void recordView() {
-        if(FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        // 상세화면 열 때마다 조회수 +1, 성공하면 최신 조회수를 화면에 반영
+        db.collection("posts").document(postId)
+                .update("viewCount", FieldValue.increment(1))
+                .addOnSuccessListener(unused -> refreshViewCount());
+
+        // 조회 기록 (누가 언제 봤는지)
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
         String viewId = UUID.randomUUID().toString();
         Map<String, Object> viewData = new HashMap<>();
@@ -181,17 +204,48 @@ public class PostDetailFragment extends Fragment {
         db.collection("posts").document(postId).collection("views").document(viewId).set(viewData);
     }
 
+    /** 증가된 최신 viewCount 를 다시 읽어 화면에 표시 */
+    private void refreshViewCount() {
+        db.collection("posts").document(postId).get().addOnSuccessListener(doc -> {
+            Post post = doc.toObject(Post.class);
+            if (post == null) return;
+            bindViewCount(post.getViewCount());
+        });
+    }
+
+    /** 조회수를 화면에 표시 (조회수 TextView 가 없으면 무시) */
+    private void bindViewCount(int count) {
+        if (tvViewCount != null) {
+            tvViewCount.setText("조회 " + count);
+        }
+    }
+
     private void bindPostData(Post post) {
         tvPostTitle.setText(post.getTitle());
         tvAuthorName.setText(post.getUserNickname());
+        loadAuthorProfileImage(post.getUserEmail());
+        bindViewCount(post.getViewCount());
 
         View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
         if (authorRow != null) {
             authorRow.setOnClickListener(v -> {
-                getParentFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(post.getUserId()))
-                        .addToBackStack(null)
-                        .commit();
+                // 현재 로그인한 내 UID 가져오기
+                String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
+                        FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
+
+                // 내 UID와 게시물 작성자 UID 비교
+                if (post.getUserId() != null && post.getUserId().equals(currentUid)) {
+                    // 내 게시물이면 MyPageFragment로 이동
+                    getParentFragmentManager().beginTransaction()
+                            .replace(R.id.fragmentContainer, new MyPageFragment())
+                            .addToBackStack(null)
+                            .commit();
+                } else {
+                    // 남의 게시물이면 기존대로 OtherMyPageFragment로 이동
+                    getParentFragmentManager().beginTransaction()
+                            .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance(post.getUserNickname()))
+                            .addToBackStack(null).commit();
+                }
             });
         }
 
@@ -219,6 +273,26 @@ public class PostDetailFragment extends Fragment {
             if (btnEditPost != null) btnEditPost.setVisibility(View.GONE);
             if (btnDeletePost != null) btnDeletePost.setVisibility(View.GONE);
         }
+    }
+
+    private void loadAuthorProfileImage(String email) {
+        if (authorProfileImage == null) return;
+
+        authorProfileImage.setImageResource(R.drawable.bg_profile_avatar);
+        if (email == null || email.isEmpty()) return;
+
+        db.collection("users").document(email).get()
+                .addOnSuccessListener(snapshot -> {
+                    String imageUrl = snapshot.getString("profileImageUrl");
+                    if (imageUrl != null
+                            && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+                        Glide.with(authorProfileImage)
+                                .load(imageUrl)
+                                .placeholder(R.drawable.bg_profile_avatar)
+                                .error(R.drawable.bg_profile_avatar)
+                                .into(authorProfileImage);
+                    }
+                });
     }
 
     private void saveSingleDayToMyTravel(int dayNumber) {

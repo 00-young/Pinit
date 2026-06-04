@@ -70,7 +70,6 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
     private static final String API_KEY = com.example.pinit.database.PlacesApiHelper.API_KEY;
 
     // ========== 콜백 인터페이스 ==========
-    interface GeocodeCallback { void onResult(LatLng latLng); }
     interface AddressCallback { void onResult(String address); }
 
     @Override
@@ -112,7 +111,49 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
                 // 삭제
                 id -> {
 
+                    Schedule target = null;
+
+                    for (Schedule s : currentSchedules) {
+
+                        if (s.getId() == id) {
+                            target = s;
+                            break;
+                        }
+                    }
+
                     dbHelper.deleteSchedule(id);
+
+                    // =========================
+                    // Firestore 삭제
+                    // =========================
+
+                    if (target != null) {
+
+                        FirebaseUser user =
+                                FirebaseAuth.getInstance()
+                                        .getCurrentUser();
+
+                        if (user != null) {
+
+                            FirestoreRepository repository =
+                                    new FirestoreRepository();
+
+                            String scheduleId =
+                                    user.getUid() + "_" + tripId;
+
+                            String dayId =
+                                    target.getDate();
+
+                            String itemId =
+                                    "item" + id;
+
+                            repository.deleteItem(
+                                    scheduleId,
+                                    dayId,
+                                    itemId
+                            );
+                        }
+                    }
 
                     buildDateTabs();
 
@@ -128,18 +169,19 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
                     intent.putExtra("schedule_time", schedule.getTime());
                     intent.putExtra("schedule_place", schedule.getPlaceName());
                     intent.putExtra("schedule_memo", schedule.getMemo());
+                    intent.putExtra("schedule_latitude", schedule.getLatitude());
+                    intent.putExtra("schedule_longitude", schedule.getLongitude());
+                    intent.putExtra("schedule_color", schedule.getColor());
+                    intent.putExtra("schedule_category", schedule.getCategory());
+                    intent.putExtra("schedule_google_place_id", schedule.getGooglePlaceId());
+                    intent.putExtra("trip_id", tripId);
                     startActivityForResult(intent, REQUEST_EDIT_SCHEDULE);
                 }
         );
         rvSchedule.setAdapter(scheduleAdapter);
 
         findViewById(R.id.btnAddSchedule).setOnClickListener(v -> openAddSchedule());
-        /*
-        findViewById(R.id.btnUploadFirestore)
-                .setOnClickListener(v -> {
-                    uploadScheduleToFirestore();
-                });
-         */
+
         findViewById(R.id.btnAddScheduleEmpty).setOnClickListener(v -> openAddSchedule());
 
 
@@ -285,10 +327,6 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
     }
 
     // ========== 지도 핀 표시 ==========
-
-    private final java.util.Map<String, LatLng> geocodeCache =
-            new java.util.HashMap<>();
-
     private void showPinsForSchedules(List<Schedule> schedules) {
 
         if (googleMap == null) return;
@@ -297,104 +335,47 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
         if (schedules.isEmpty()) return;
 
-        int total = schedules.size();
+        List<LatLng> positions = new ArrayList<>();
 
-        LatLng[] orderedPositions = new LatLng[total];
-
-        int[] done = {0};
-
-        for (int i = 0; i < total; i++) {
+        for (int i = 0; i < schedules.size(); i++) {
 
             Schedule s = schedules.get(i);
 
-            String query =
-                    (s.getPlaceName() != null && !s.getPlaceName().isEmpty())
-                            ? s.getPlaceName()
-                            : s.getTitle();
+            double lat = s.getLatitude();
+            double lng = s.getLongitude();
 
-            if (query == null || query.isEmpty()) {
-
-                done[0]++;
-
-                if (done[0] == total) {
-                    onAllGeocodeDone(orderedPositions);
-                }
-
+            // 좌표 없는 일정은 스킵
+            if (lat == 0 && lng == 0) {
                 continue;
             }
 
-            final int index = i;
+            LatLng pos = new LatLng(lat, lng);
 
-            final String markerTitle =
-                    (i + 1) + ". " + s.getTitle();
+            positions.add(pos);
 
-            final String snippet = query;
-
-            // =========================
-            // cache 사용
-            // =========================
-
-            if (geocodeCache.containsKey(query)) {
-
-                LatLng cached = geocodeCache.get(query);
-
-                runOnUiThread(() -> {
-
-                    if (cached != null && googleMap != null) {
-
-                        orderedPositions[index] = cached;
-
-                        googleMap.addMarker(
-                                new MarkerOptions()
-                                        .position(cached)
-                                        .title(markerTitle)
-                                        .snippet(snippet)
-                                        .icon(BitmapDescriptorFactory.defaultMarker(
-                                                BitmapDescriptorFactory.HUE_YELLOW))
-                        );
-                    }
-
-                    done[0]++;
-
-                    if (done[0] == total) {
-                        onAllGeocodeDone(orderedPositions);
-                    }
-                });
-
-            } else {
-
-                geocode(query, latLng -> {
-
-                    if (latLng != null) {
-                        geocodeCache.put(query, latLng);
-                    }
-
-                    runOnUiThread(() -> {
-
-                        if (latLng != null && googleMap != null) {
-
-                            orderedPositions[index] = latLng;
-
-                            googleMap.addMarker(
-                                    new MarkerOptions()
-                                            .position(latLng)
-                                            .title(markerTitle)
-                                            .snippet(snippet)
-                                            .icon(BitmapDescriptorFactory.defaultMarker(
-                                                    BitmapDescriptorFactory.HUE_YELLOW))
-                            );
-                        }
-
-                        done[0]++;
-
-                        if (done[0] == total) {
-                            onAllGeocodeDone(orderedPositions);
-                        }
-                    });
-                });
-            }
+            googleMap.addMarker(
+                    new MarkerOptions()
+                            .position(pos)
+                            .title((i + 1) + ". " + s.getTitle())
+                            .snippet(s.getPlaceName())
+                            .icon(BitmapDescriptorFactory.defaultMarker(
+                                    BitmapDescriptorFactory.HUE_YELLOW))
+            );
         }
+
+        if (positions.size() >= 2) {
+
+            googleMap.addPolyline(
+                    new PolylineOptions()
+                            .addAll(positions)
+                            .width(8f)
+                            .color(Color.parseColor("#FF9800"))
+            );
+        }
+
+        fitCameraToPins(positions);
     }
+
     private void fitCameraToPins(List<LatLng> positions) {
         if (googleMap == null) return;
         if (positions.isEmpty()) {
@@ -409,57 +390,6 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
             for (LatLng pos : positions) builder.include(pos);
             googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 120));
         }
-    }
-
-    private void onAllGeocodeDone(LatLng[] orderedPositions) {
-
-        List<LatLng> validPositions = new ArrayList<>();
-
-        for (LatLng pos : orderedPositions) {
-
-            if (pos != null) {
-                validPositions.add(pos);
-            }
-        }
-
-        if (validPositions.size() >= 2) {
-
-            PolylineOptions polylineOptions =
-                    new PolylineOptions()
-                            .addAll(validPositions)
-                            .width(8f)
-                            .color(Color.parseColor("#FF9800"));
-
-            googleMap.addPolyline(polylineOptions);
-        }
-
-        fitCameraToPins(validPositions);
-    }
-
-    private void geocode(String address, GeocodeCallback callback) {
-        new Thread(() -> {
-            try {
-                String url = "https://maps.googleapis.com/maps/api/geocode/json?address="
-                        + java.net.URLEncoder.encode(address, "UTF-8")
-                        + "&language=ko&key=" + API_KEY;
-                OkHttpClient client = new OkHttpClient();
-                Request request = new Request.Builder().url(url).build();
-                Response response = client.newCall(request).execute();
-                String body = response.body().string();
-                JSONObject json = new JSONObject(body);
-                JSONArray results = json.optJSONArray("results");
-                if (results != null && results.length() > 0) {
-                    JSONObject loc = results.getJSONObject(0)
-                            .getJSONObject("geometry")
-                            .getJSONObject("location");
-                    callback.onResult(new LatLng(loc.getDouble("lat"), loc.getDouble("lng")));
-                } else {
-                    callback.onResult(null);
-                }
-            } catch (Exception e) {
-                callback.onResult(null);
-            }
-        }).start();
     }
 
     // ========== 지도 탭 → 역지오코딩 → 일정 추가 ==========
@@ -554,7 +484,52 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
                 : address);
         s.setMemo("");
         s.setColor("#FFDA44");
-        dbHelper.insertSchedule(s);
+
+        s.setLatitude(latLng.latitude);
+        s.setLongitude(latLng.longitude);
+
+        long insertedId =
+                dbHelper.insertSchedule(s);
+
+        s.setId((int) insertedId);
+
+// =========================
+// Firestore 업로드
+// =========================
+
+        FirebaseUser user =
+                FirebaseAuth.getInstance()
+                        .getCurrentUser();
+
+        if (user != null) {
+
+            FirestoreRepository repository =
+                    new FirestoreRepository();
+
+            String scheduleId =
+                    user.getUid() + "_"
+                            + tripId;
+
+            String dayId =
+                    s.getDate();
+
+            String itemId =
+                    "item" + insertedId;
+
+            repository.uploadDay(
+                    scheduleId,
+                    dayId,
+                    1,
+                    dayId
+            );
+
+            repository.uploadItem(
+                    scheduleId,
+                    dayId,
+                    itemId,
+                    s
+            );
+        }
 
         if (googleMap != null) {
             googleMap.addMarker(new MarkerOptions()
