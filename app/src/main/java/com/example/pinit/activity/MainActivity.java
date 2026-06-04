@@ -22,6 +22,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -107,7 +108,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void startRecommendation(User user) {
         RecommendationManager recommendationManager = new RecommendationManager();
-
         if (FirebaseAuth.getInstance().getCurrentUser() == null) {
             return;
         }
@@ -115,6 +115,8 @@ public class MainActivity extends AppCompatActivity {
         FirebaseFirestore.getInstance()
                 .collection("schedules")
                 .whereEqualTo("userId", FirebaseAuth.getInstance().getCurrentUser().getUid())
+                .orderBy("createdAt",
+                        Query.Direction.DESCENDING)
                 .limit(1)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
@@ -127,6 +129,12 @@ public class MainActivity extends AppCompatActivity {
                     DocumentSnapshot doc = querySnapshot.getDocuments().get(0);
                     Double lat = doc.getDouble("latitude");
                     Double lng = doc.getDouble("longitude");
+                    Log.e(
+                            "RECOMMEND_TEST",
+                            "scheduleId=" + doc.getId()
+                                    + " lat=" + lat
+                                    + " lng=" + lng
+                    );
 
                     if (lat == null || lng == null) {
                         Log.e("FINAL_RECOMMEND", "좌표 없음");
