@@ -112,6 +112,9 @@ class CreatePostFragment : Fragment() {
     private var travelSelectedCountry: String? = null
     private var travelSelectedPeople: String? = null
 
+    // 현재 선택된 해시태그 목록 (자동계산 태그 + 사용자 선택 태그)
+    private val selectedHashtags = linkedSetOf<String>()
+
     private data class PendingImage(val editor: EditorBlock, val uri: Uri)
 
     companion object {
@@ -147,11 +150,16 @@ class CreatePostFragment : Fragment() {
                     travelSelectedCountry = selectedCountry
                     travelSelectedPeople = selectedPeople
 
+                    // 날짜/국가/인원은 여행설정 영역에 표시
                     addTravelSettingTag(selectedDate)
                     addTravelSettingTag(selectedCountry)
                     addTravelSettingTag(selectedPeople)
-                    // 날짜 범위로 "N박 M일" 자동 태그 추가
-                    addTravelSettingTag(durationTag(selectedDate))
+
+                    // "N박 M일"은 해시태그 칩으로 추가 (해시태그 선택 화면에서도 선택된 상태로 보이게)
+                    durationTag(selectedDate)?.let {
+                        selectedHashtags.add(it)
+                        renderHashtagChips()
+                    }
                 }
             }
         }
@@ -184,22 +192,12 @@ class CreatePostFragment : Fragment() {
         }
 
         parentFragmentManager.setFragmentResultListener("tagResult", this) { _, bundle ->
-            val selectedTags = bundle.getStringArrayList("selectedTags")
-            if (selectedTags != null && layoutTagsContainer != null) {
-                layoutTagsContainer!!.removeAllViews()
-                for (tag in selectedTags) {
-                    val tvTag = TextView(context).apply {
-                        text = "#$tag"
-                        setTextColor(0xFF000000.toInt())
-                        setBackgroundColor(0xFFEEEEEE.toInt())
-                        setPadding(32, 12, 32, 12)
-                        layoutParams = LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT
-                        ).apply { setMargins(0, 0, 16, 0) }
-                    }
-                    layoutTagsContainer!!.addView(tvTag)
-                }
+            val tags = bundle.getStringArrayList("selectedTags")
+            if (tags != null) {
+                // 선택 화면 결과로 해시태그 목록 교체 후 칩 다시 그리기
+                selectedHashtags.clear()
+                selectedHashtags.addAll(tags)
+                renderHashtagChips()
             }
         }
 
@@ -586,7 +584,8 @@ class CreatePostFragment : Fragment() {
             MyPlansBottomSheetFragment().show(parentFragmentManager, "MyPlansBottomSheet")
         }
         view.findViewById<View>(R.id.btnInsertTag).setOnClickListener {
-            TagBottomSheetFragment().show(parentFragmentManager, "TagBottomSheet")
+            TagBottomSheetFragment.newInstance(ArrayList(selectedHashtags))
+                .show(parentFragmentManager, "TagBottomSheet")
         }
         view.findViewById<View>(R.id.ivMenuPhoto).setOnClickListener {
             galleryLauncher.launch(
@@ -655,14 +654,19 @@ class CreatePostFragment : Fragment() {
                     ?: FirebaseAuth.getInstance().currentUser?.email?.substringBefore("@")
                     ?: "user"
 
+                val hashtags = collectHashtags().toMutableList()
+                durationTag(travelSelectedDate)?.let { if (!hashtags.contains(it)) hashtags.add(it) }
+
                 val post = Post(
                     postId = postId,
                     userId = uid,
+                    userEmail = userEmail,
                     userNickname = nickname,
                     title = title,
                     postImageType = "image",
                     thumbnailImageUrl = "",
-                    hashtags = listOf("여행"),
+                    hashtags = hashtags,
+                    visibility = visibility,
                     createdAt = Timestamp.now()
                 )
 
@@ -746,7 +750,7 @@ class CreatePostFragment : Fragment() {
             .addOnFailureListener {
                 toast("닉네임 정보를 불러오지 못했습니다")
             }
-        }
+    }
 
 
     /**
@@ -994,18 +998,29 @@ class CreatePostFragment : Fragment() {
         }
     }
 
+    /** selectedHashtags 를 해시태그 칩 영역(layoutTagsContainer)에 다시 그린다 */
+    private fun renderHashtagChips() {
+        val container = layoutTagsContainer ?: return
+        container.removeAllViews()
+        for (tag in selectedHashtags) {
+            val tvTag = TextView(context).apply {
+                text = "#$tag"
+                setTextColor(0xFF000000.toInt())
+                setBackgroundColor(0xFFEEEEEE.toInt())
+                setPadding(32, 12, 32, 12)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 0, 16, 0) }
+            }
+            container.addView(tvTag)
+        }
+    }
+
     /** 화면의 해시태그 칩(layoutTagsContainer)에서 태그 문자열들을 수집 */
     private fun collectHashtags(): List<String> {
-        val container = layoutTagsContainer ?: return emptyList()
-        val tags = mutableListOf<String>()
-        for (i in 0 until container.childCount) {
-            val v = container.getChildAt(i)
-            if (v is TextView) {
-                val t = v.text?.toString()?.trim()
-                if (!t.isNullOrEmpty()) tags.add(t.removePrefix("#"))
-            }
-        }
-        return tags
+        // 선택된 해시태그(자동계산 + 사용자 선택)를 그대로 반환
+        return selectedHashtags.toList()
     }
 
     private fun calculateTotalBudget() {
@@ -1106,6 +1121,10 @@ class CreatePostFragment : Fragment() {
             spinnerVisibility?.setSelection(
                 if (post.visibility == Post.VISIBILITY_PRIVATE) 1 else 0
             )
+            // 기존 해시태그 복원 (칩 영역에 표시 + 선택 화면에서도 선택 상태로 보이게)
+            selectedHashtags.clear()
+            selectedHashtags.addAll(post.hashtags)
+            renderHashtagChips()
         }
 
         // 2) 본문 블록 복원 (sortOrder 순)

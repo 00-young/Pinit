@@ -16,36 +16,46 @@ import java.util.ArrayList;
 
 public class TagBottomSheetFragment extends BottomSheetDialogFragment {
 
+    private static final String ARG_PRESELECTED = "preselectedTags";
+
+    /** 미리 선택된 태그를 전달해 화면을 여는 팩토리 */
+    public static TagBottomSheetFragment newInstance(ArrayList<String> preselected) {
+        TagBottomSheetFragment fragment = new TagBottomSheetFragment();
+        Bundle args = new Bundle();
+        args.putStringArrayList(ARG_PRESELECTED, preselected != null ? preselected : new ArrayList<>());
+        fragment.setArguments(args);
+        return fragment;
+    }
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.layout_tag_bottom_sheet, container, false);
 
-        // 1. 적용하기 버튼 찾기
-        Button btnApplyTag = view.findViewById(R.id.btnApplyTags);
+        ChipGroup groupTogether = view.findViewById(R.id.chipGroupWith);
+        ChipGroup groupDuration = view.findViewById(R.id.chipGroupDuration);
+        ChipGroup groupTheme = view.findViewById(R.id.chipGroupTheme);
 
-        // 버튼 클릭 이벤트
+        // 전달받은 미리 선택 태그들을 칩에 반영 (이미 선택된 상태로 표시)
+        ArrayList<String> preselected = getArguments() != null
+                ? getArguments().getStringArrayList(ARG_PRESELECTED) : null;
+        if (preselected != null && !preselected.isEmpty()) {
+            applyPreselection(groupTogether, preselected);
+            applyPreselection(groupDuration, preselected);
+            applyPreselection(groupTheme, preselected);
+        }
+
+        Button btnApplyTag = view.findViewById(R.id.btnApplyTags);
         if (btnApplyTag != null) {
             btnApplyTag.setOnClickListener(v -> {
-
                 ArrayList<String> selectedTags = new ArrayList<>();
-
-
-                ChipGroup groupTogether = view.findViewById(R.id.chipGroupWith);
-                ChipGroup groupDuration = view.findViewById(R.id.chipGroupDuration);
-                ChipGroup groupTheme = view.findViewById(R.id.chipGroupTheme);
-
-                // 만들어둔 도우미 함수를 이용해 체크된 칩의 글자만 쏙쏙 빼서 selectedTags에 담습니다.
                 addCheckedChipsToList(groupTogether, selectedTags);
                 addCheckedChipsToList(groupDuration, selectedTags);
                 addCheckedChipsToList(groupTheme, selectedTags);
 
-                // 택배 상자(Bundle)에 담아서 CreatePostFragment로 쏘기
                 Bundle bundle = new Bundle();
                 bundle.putStringArrayList("selectedTags", selectedTags);
                 getParentFragmentManager().setFragmentResult("tagResult", bundle);
-
-                // 바텀시트 닫기
                 dismiss();
             });
         }
@@ -53,16 +63,31 @@ public class TagBottomSheetFragment extends BottomSheetDialogFragment {
         return view;
     }
 
-    // 칩 그룹을 넘겨주면, 그 안에서 체크된(V) 칩들의 글자만 찾아주는 도우미 함수입니다.
+    /** preselected 목록에 있는 칩을 체크 상태로 만든다 (# 유무 무관하게 비교) */
+    private void applyPreselection(ChipGroup chipGroup, ArrayList<String> preselected) {
+        if (chipGroup == null) return;
+        for (int i = 0; i < chipGroup.getChildCount(); i++) {
+            View child = chipGroup.getChildAt(i);
+            if (child instanceof Chip) {
+                Chip chip = (Chip) child;
+                String chipText = chip.getText().toString().replace("#", "").trim();
+                for (String tag : preselected) {
+                    if (chipText.equals(tag.replace("#", "").trim())) {
+                        chip.setChecked(true);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     private void addCheckedChipsToList(ChipGroup chipGroup, ArrayList<String> list) {
         if (chipGroup == null) return;
-
         for (int i = 0; i < chipGroup.getChildCount(); i++) {
             View child = chipGroup.getChildAt(i);
             if (child instanceof Chip) {
                 Chip chip = (Chip) child;
                 if (chip.isChecked()) {
-                    // 글자 앞에 '#'이 붙어있다면 떼어내고 깔끔하게 글자만 담아줍니다.
                     list.add(chip.getText().toString().replace("#", ""));
                 }
             }
