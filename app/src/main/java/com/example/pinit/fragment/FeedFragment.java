@@ -11,6 +11,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.PopupMenu;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -47,10 +48,10 @@ public class FeedFragment extends Fragment {
     private HorizontalScrollView resultTagScroller;
     private ChipGroup resultTagContainer;
     private Button btnSort;
+    private TextView tvEmptyFeed;
 
     private final Set<String> selectedTags = new LinkedHashSet<>();
     private final List<String> travelSettingTags = new ArrayList<>();
-
     private final String[] knownTags = {
             "#아이와 함께", "#부모님과 함께", "#친구와 함께",
             "#가족들과 함께", "#신혼여행 맞춤", "#커플 여행",
@@ -86,6 +87,7 @@ public class FeedFragment extends Fragment {
         resultTagScroller = view.findViewById(R.id.resultTagScroller);
         resultTagContainer = view.findViewById(R.id.resultTagContainer);
         btnSort = view.findViewById(R.id.btnSort);
+        tvEmptyFeed = view.findViewById(R.id.tvEmptyFeed);
 
         btnSort.setOnClickListener(v -> {
             PopupMenu popup = new PopupMenu(getContext(), btnSort);
@@ -229,6 +231,7 @@ public class FeedFragment extends Fragment {
         if (currentUser == null || currentUser.getEmail() == null) {
             postList.clear();
             adapter.updatePosts(postList);
+            checkEmptyState(); // 추가
             return;
         }
         String myEmail = currentUser.getEmail();
@@ -265,6 +268,7 @@ public class FeedFragment extends Fragment {
         if (emails.isEmpty()) {
             postList.clear();
             adapter.updatePosts(postList);
+            checkEmptyState(); // 추가
             return;
         }
 
@@ -299,6 +303,7 @@ public class FeedFragment extends Fragment {
 
                     adapter.updatePosts(postList);
                     adapter.sortPostsByLatest(); // 최신순 정렬
+                    checkEmptyState(); // 추가
                 })
                 .addOnFailureListener(Throwable::printStackTrace);
     }
@@ -340,6 +345,7 @@ public class FeedFragment extends Fragment {
                     if (postIds.isEmpty()) {
                         postList.clear();
                         adapter.updatePosts(postList);
+                        checkEmptyState(); // 추가
                         return kotlin.Unit.INSTANCE;
                     }
 
@@ -373,9 +379,30 @@ public class FeedFragment extends Fragment {
 
                                 adapter.updatePosts(postList);
                                 adapter.sortPostsByLatest();
+                                checkEmptyState(); // 추가
                             });
                     return kotlin.Unit.INSTANCE;
                 }
         );
+    }
+    // 3. 빈 화면 상태를 업데이트하는 헬퍼 메서드 추가
+    private void checkEmptyState() {
+        if (postList.isEmpty()) {
+            String keyword = searchEditText.getText().toString().trim();
+            boolean isSearchMode = !keyword.isEmpty() || !selectedTags.isEmpty() || !travelSettingTags.isEmpty();
+
+            // 검색 모드일 때와 홈 피드일 때의 문구 분리
+            if (isSearchMode) {
+                tvEmptyFeed.setText("검색 결과가 없습니다.");
+            } else {
+                tvEmptyFeed.setText("팔로우를 통해 게시물을 업데이트 받아보세요!");
+            }
+
+            tvEmptyFeed.setVisibility(View.VISIBLE);
+            recyclerView.setVisibility(View.GONE);
+        } else {
+            tvEmptyFeed.setVisibility(View.GONE);
+            recyclerView.setVisibility(View.VISIBLE);
+        }
     }
 }
