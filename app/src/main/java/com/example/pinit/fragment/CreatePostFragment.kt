@@ -1127,6 +1127,41 @@ class CreatePostFragment : Fragment() {
             renderHashtagChips()
         }
 
+        // 1.5) 추가: 검색 인덱스(searchIndexPosts)에서 여행 설정(날짜, 장소, 인원)을 가져와서 복구
+        db.collection("searchIndexPosts").document(postId).get().addOnSuccessListener { indexDoc ->
+            if (indexDoc.exists()) {
+                val startDate = indexDoc.getString("startDate") ?: ""
+                val endDate = indexDoc.getString("endDate") ?: ""
+                val country = indexDoc.getString("country") ?: ""
+                val travelerCount = indexDoc.getLong("travelerCount") ?: 0L
+
+                // ① 날짜 복원
+                if (startDate.isNotEmpty() && endDate.isNotEmpty() && startDate != endDate) {
+                    travelSelectedDate = "$startDate ~ $endDate"
+                } else if (startDate.isNotEmpty()) {
+                    travelSelectedDate = startDate
+                }
+
+                // ② 장소/국가 복원
+                travelSelectedCountry = country
+
+                // ③ 인원 복원 (숫자를 다시 글자로 번역)
+                travelSelectedPeople = when (travelerCount) {
+                    1L -> "혼자"
+                    2L -> "2명"
+                    else -> "" // (3~4명과 가족은 파이어베이스에 0으로 저장되도록 짜여있어서 구분이 어려워 빈칸 처리됩니다)
+                }
+
+                // ④ 화면 상단의 회색 칩(Tag) 영역에 예쁘게 다시 그려주기
+                activity?.runOnUiThread {
+                    layoutTravelSettingTagsContainer?.removeAllViews()
+                    addTravelSettingTag(travelSelectedDate)
+                    addTravelSettingTag(travelSelectedCountry)
+                    addTravelSettingTag(travelSelectedPeople)
+                }
+            }
+        }
+
         // 2) 본문 블록 복원 (sortOrder 순)
         postRef.collection("contentBlocks")
             .orderBy("sortOrder")

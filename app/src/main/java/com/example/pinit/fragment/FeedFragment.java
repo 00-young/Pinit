@@ -326,12 +326,20 @@ public class FeedFragment extends Fragment {
                 travelerCount = 1L; // "혼자"는 1명으로 검색
             } else if (tag.equals("가족") || tag.contains("가족")) {
                 travelerCount = 0L; // CreatePostFragment에서 "가족"을 0으로 저장하므로 0으로 검색
-            } else if (tag.contains("~") && tag.matches(".*\\d{4}-\\d{2}-\\d{2}.*")) {
-                // 날짜 포맷일 경우에만 시작/종료일로 분리
-                String[] parts = tag.split("~");
-                if(parts.length >= 2) {
-                    filterStartDate = parts[0].trim().replace("/", "-");
-                    filterEndDate = parts[1].trim().replace("/", "-");
+
+                // 업데이트: 202X년 숫자가 있고 슬래시(/)나 하이픈(-)이 있으면 '무조건' 날짜로 인식하게 만듭니다
+            } else if (tag.matches(".*\\d{4}.*") && (tag.contains("/") || tag.contains("-"))) {
+                if (tag.contains("~")) {
+                    // 기간(~) 검색일 때 (예: 2026/06/01 ~ 2026/06/02)
+                    String[] parts = tag.split("~");
+                    if (parts.length >= 2) {
+                        filterStartDate = parts[0].trim().replace("/", "-");
+                        filterEndDate = parts[1].trim().replace("/", "-");
+                    }
+                } else {
+                    // 단일 날짜(하루) 검색일 때 (예: 2026/06/01)
+                    filterStartDate = tag.trim().replace("/", "-");
+                    filterEndDate = filterStartDate;
                 }
             } else {
                 location = tag; // 나머지는 장소로 취급
