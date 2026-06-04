@@ -243,9 +243,8 @@ public class PostDetailFragment extends Fragment {
                 } else {
                     // 남의 게시물이면 기존대로 OtherMyPageFragment로 이동
                     getParentFragmentManager().beginTransaction()
-                            .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(post.getUserId()))
-                            .addToBackStack(null)
-                            .commit();
+                            .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance(post.getUserNickname()))
+                            .addToBackStack(null).commit();
                 }
             });
         }
