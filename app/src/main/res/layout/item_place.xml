@@ -15,10 +15,11 @@
         android:orientation="vertical"
         android:padding="14dp">
 
-        <!-- 이미지 자리 (회색 배경) -->
-        <View
+        <ImageView
+            android:id="@+id/ivPlacePhoto"
             android:layout_width="match_parent"
-            android:layout_height="100dp"
+            android:layout_height="120dp"
+            android:scaleType="centerCrop"
             android:background="#FAFAFA"
             android:layout_marginBottom="10dp"/>
 

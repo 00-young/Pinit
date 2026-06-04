@@ -12,7 +12,6 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
-import com.example.pinit.activity.AddTripActivity;
 import com.example.pinit.activity.TripDetailActivity;
 import com.example.pinit.activity.TripSummaryActivity;
 import com.example.pinit.model.Trip;
@@ -82,21 +81,6 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
             context.startActivity(intent);
         });
 
-        // 여행 수정
-        holder.btnEditTrip.setOnClickListener(v -> {
-
-            Intent intent =
-                    new Intent(context,
-                            AddTripActivity.class);
-
-            intent.putExtra(
-                    "edit_trip_id",
-                    t.getId()
-            );
-
-            context.startActivity(intent);
-        });
-
         // 여행요약 → TripSummaryActivity (★ 변경)
         holder.btnSummary.setOnClickListener(v -> {
             Intent intent = new Intent(context, TripSummaryActivity.class);
@@ -125,7 +109,7 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         TextView tvTitle, tvDestination, tvDate, tvBudget, tvDday;
-        Button btnDetail, btnEditTrip, btnSummary;
+        Button btnDetail, btnSummary;
 
         ViewHolder(View view) {
             super(view);
@@ -135,7 +119,6 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
             tvBudget = view.findViewById(R.id.tvBudget);
             tvDday = view.findViewById(R.id.tvDday);
             btnDetail = view.findViewById(R.id.btnDetail);
-            btnEditTrip = view.findViewById(R.id.btnEditTrip);
             btnSummary = view.findViewById(R.id.btnSummary);
         }
     }

@@ -184,6 +184,7 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
         findViewById(R.id.btnAddScheduleEmpty).setOnClickListener(v -> openAddSchedule());
 
+
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getSupportFragmentManager().findFragmentById(R.id.mapView);
         if (mapFragment != null) mapFragment.getMapAsync(this);
