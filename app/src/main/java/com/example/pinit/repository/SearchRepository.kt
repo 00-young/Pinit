@@ -1,4 +1,5 @@
 package com.example.pinit
+import com.example.pinit.index.SearchIndex
 
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
@@ -17,6 +18,7 @@ class SearchRepository {
                         postId = doc.id, //  문서 고유 ID 매핑 (상세 페이지 이동 시 필수)
                         title = doc.getString("title") ?: "",
                         content = doc.getString("content") ?: "",
+                        userNickname = doc.getString("userNickname") ?: "",
                         mainTheme = doc.getString("mainTheme") ?: "",
                         hashtags = (doc.get("hashtags") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                         country = doc.getString("country") ?: "",
@@ -54,7 +56,8 @@ class SearchRepository {
                 val keywordMatch =
                     keyword.isNullOrBlank() ||
                             post.title.contains(keyword, ignoreCase = true) ||
-                            post.content.contains(keyword, ignoreCase = true)
+                            post.content.contains(keyword, ignoreCase = true) ||
+                            post.userNickname.contains(keyword, ignoreCase = true)
 
                 val travelerMatch =
                     travelerCount == null ||

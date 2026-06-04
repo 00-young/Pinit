@@ -1,9 +1,11 @@
-package com.example.pinit
-
+package com.example.pinit.index
 data class SearchIndex(
-    val postId: String = "", // 이 부분 추가
+    val postId: String = "",
     val title: String = "",
     val content: String = "",
+
+    val userNickname: String = "",
+
     val mainTheme: String = "",
     val hashtags: List<String> = emptyList(),
     val country: String = "",
@@ -14,4 +16,3 @@ data class SearchIndex(
     val postImageUrl: String = "",
     val createdAt: Long = 0L
 )
-

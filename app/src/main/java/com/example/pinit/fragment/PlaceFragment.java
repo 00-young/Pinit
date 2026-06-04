@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.location.Geocoder;
 import android.location.Address;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -487,7 +488,7 @@ public class PlaceFragment extends Fragment {
         );
         schedule.setDate(date);
         schedule.setTime(time);
-        schedule.setMemo(place.getOrDefault("rating", "").isEmpty() ? "" : place.get("rating") + "점");
+        schedule.setMemo("");
         schedule.setColor("#FFDA44");
         long insertedId =
                 dbHelper.insertSchedule(schedule);
@@ -497,7 +498,17 @@ public class PlaceFragment extends Fragment {
         FirebaseUser user =
                 FirebaseAuth.getInstance().getCurrentUser();
 
-        if (user == null) return;
+        if (user == null) {
+
+            Toast.makeText(requireContext(),
+                    "로그인이 필요합니다.",
+                    Toast.LENGTH_SHORT).show();
+
+            Log.e("FIREBASE_UPLOAD",
+                    "Firebase user is null");
+
+            return;
+        }
 
         String userId = user.getUid();
 
