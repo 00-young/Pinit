@@ -625,9 +625,15 @@ class CreatePostFragment : Fragment() {
 
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
         if (uid.isEmpty()) {
-            toast("로그인이 필요합니다"); return
+            toast("로그인이 필요합니다")
+            return
         }
+
         val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
+        if (userEmail.isEmpty()) {
+            toast("이메일 정보를 불러올 수 없습니다")
+            return
+        }
 
         // 중복 업로드 방지: 이미 업로드 중이면 무시
         if (isUploading) return
@@ -639,87 +645,109 @@ class CreatePostFragment : Fragment() {
         val visibility = if (spinnerVisibility?.selectedItem?.toString() == "나만보기")
             Post.VISIBILITY_PRIVATE else Post.VISIBILITY_PUBLIC
 
-        val post = Post(
-            postId = postId,
-            userId = uid,
-            userEmail = userEmail,
-            userNickname = "user",
-            title = title,
-            postImageType = "image",
-            thumbnailImageUrl = "",
-            hashtags = listOf("여행"),
-            visibility = visibility,
-            createdAt = Timestamp.now()
-        )
+        FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(userEmail)
+            .get()
+            .addOnSuccessListener { document ->
 
-        val editors = mutableListOf<EditorBlock>()
-        val pendingImages = mutableListOf<PendingImage>()
-        var order = 0
+                val nickname = document.getString("nickname")
+                    ?: FirebaseAuth.getInstance().currentUser?.email?.substringBefore("@")
+                    ?: "user"
 
-        val content = layoutDynamicContent ?: return
-        for (i in 0 until content.childCount) {
-            val editor = content.getChildAt(i).tag as? EditorBlock ?: continue
-            when (editor.type) {
-                ContentBlock.TYPE_TEXT -> {
-                    val v = content.getChildAt(i)
-                    if (v is EditText) editor.text = v.text.toString().trim()
-                    if (editor.text.isEmpty()) continue
+                val post = Post(
+                    postId = postId,
+                    userId = uid,
+                    userNickname = nickname,
+                    title = title,
+                    postImageType = "image",
+                    thumbnailImageUrl = "",
+                    hashtags = listOf("여행"),
+                    createdAt = Timestamp.now()
+                )
+
+                // ↓↓↓ 여기부터 기존 코드 그대로 ↓↓↓
+
+                val editors = mutableListOf<EditorBlock>()
+                val pendingImages = mutableListOf<PendingImage>()
+                var order = 0
+
+                val content = layoutDynamicContent ?: return@addOnSuccessListener
+                for (i in 0 until content.childCount) {
+                    val editor = content.getChildAt(i).tag as? EditorBlock ?: continue
+                    when (editor.type) {
+                        ContentBlock.TYPE_TEXT -> {
+                            val v = content.getChildAt(i)
+                            if (v is EditText) editor.text = v.text.toString().trim()
+                            if (editor.text.isEmpty()) continue
+                        }
+
+                        ContentBlock.TYPE_IMAGE -> {
+                            editor.localImageUri?.let {
+                                pendingImages.add(
+                                    PendingImage(
+                                        editor,
+                                        it
+                                    )
+                                )
+                            }
+                        }
+                        // place / map 은 데이터가 이미 채워져 있음
+                    }
+                    editor.sortOrder = order++
+                    editors.add(editor)
                 }
 
-                ContentBlock.TYPE_IMAGE -> {
-                    editor.localImageUri?.let { pendingImages.add(PendingImage(editor, it)) }
+                // 갤러리 썸네일이 있으면 그대로 업로드
+                if (thumbnailUri != null) {
+                    setUploading(true)
+                    uploadImagesThenSave(post, editors, pendingImages, null)
+                    return@addOnSuccessListener
                 }
-                // place / map 은 데이터가 이미 채워져 있음
-            }
-            editor.sortOrder = order++
-            editors.add(editor)
-        }
 
-        // 갤러리 썸네일이 있으면 그대로 업로드
-        if (thumbnailUri != null) {
-            setUploading(true)
-            uploadImagesThenSave(post, editors, pendingImages, null)
-            return
-        }
+                // 수정 모드: 새 갤러리 이미지를 안 골랐으면, 본문의 기존 이미지 URL을 썸네일로 사용
+                if (isEditMode) {
+                    val existingImageUrl = editors.firstOrNull {
+                        it.type == ContentBlock.TYPE_IMAGE && it.imageUrl.isNotEmpty()
+                    }?.imageUrl
+                    if (existingImageUrl != null) {
+                        setUploading(true)
+                        uploadImagesThenSave(post, editors, pendingImages, existingImageUrl)
+                        return@addOnSuccessListener
+                    }
+                    // 본문에 이미지가 없으면 아래 Static Map 경로로 진행
+                }
 
-        // 수정 모드: 새 갤러리 이미지를 안 골랐으면, 본문의 기존 이미지 URL을 썸네일로 사용
-        if (isEditMode) {
-            val existingImageUrl = editors.firstOrNull {
-                it.type == ContentBlock.TYPE_IMAGE && it.imageUrl.isNotEmpty()
-            }?.imageUrl
-            if (existingImageUrl != null) {
+                // 썸네일이 없으면 모든 DAY 핀을 합친 Static Map 으로 대체.
+                // 좌표가 아직 안 채워진 map 블록이 있으면 먼저 geocode 로 보강한다.
+                val mapEditors = editors.filter { it.type == ContentBlock.TYPE_MAP }
+
+                if (mapEditors.isEmpty()) {
+                    // 일정(map 블록)도 없고 썸네일도 없음 → 만들 수 없음
+                    toast("대표 이미지를 선택하거나 일정을 추가하세요")
+                    return@addOnSuccessListener
+                }
+
+                // 업로드 시작(버튼 회색 잠금). geocode 동안에도 막힌 상태 유지.
                 setUploading(true)
-                uploadImagesThenSave(post, editors, pendingImages, existingImageUrl)
-                return
+
+                // 좌표 미확보 map 블록을 채운 뒤 업로드 진행
+                ensureMapCoordinates(mapEditors) {
+                    val staticMapUrl = buildStaticMapUrl(editors)
+                    if (staticMapUrl == null) {
+                        // geocode 후에도 좌표가 하나도 안 잡힌 경우
+                        setUploading(false)
+                        toast("지도를 만들 수 없습니다. 대표 이미지를 선택해주세요")
+                        return@ensureMapCoordinates
+                    }
+                    uploadImagesThenSave(post, editors, pendingImages, staticMapUrl)
+                }
             }
-            // 본문에 이미지가 없으면 아래 Static Map 경로로 진행
-        }
-
-        // 썸네일이 없으면 모든 DAY 핀을 합친 Static Map 으로 대체.
-        // 좌표가 아직 안 채워진 map 블록이 있으면 먼저 geocode 로 보강한다.
-        val mapEditors = editors.filter { it.type == ContentBlock.TYPE_MAP }
-
-        if (mapEditors.isEmpty()) {
-            // 일정(map 블록)도 없고 썸네일도 없음 → 만들 수 없음
-            toast("대표 이미지를 선택하거나 일정을 추가하세요")
-            return
-        }
-
-        // 업로드 시작(버튼 회색 잠금). geocode 동안에도 막힌 상태 유지.
-        setUploading(true)
-
-        // 좌표 미확보 map 블록을 채운 뒤 업로드 진행
-        ensureMapCoordinates(mapEditors) {
-            val staticMapUrl = buildStaticMapUrl(editors)
-            if (staticMapUrl == null) {
-                // geocode 후에도 좌표가 하나도 안 잡힌 경우
-                setUploading(false)
-                toast("지도를 만들 수 없습니다. 대표 이미지를 선택해주세요")
-                return@ensureMapCoordinates
+            .addOnFailureListener {
+                toast("닉네임 정보를 불러오지 못했습니다")
             }
-            uploadImagesThenSave(post, editors, pendingImages, staticMapUrl)
         }
-    }
+
 
     /**
      * map 블록들 중 좌표(markers)가 비어있는 것을 geocode 로 채운 뒤 onReady 호출.

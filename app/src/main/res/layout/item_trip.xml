@@ -92,6 +92,16 @@
                 android:layout_marginRight="8dp"/>
 
             <Button
+                android:id="@+id/btnEditTrip"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="여행 수정"
+                android:textSize="12sp"
+                android:textColor="#000000"
+                android:backgroundTint="#FFE082"
+                android:layout_marginRight="8dp"/>
+
+            <Button
                 android:id="@+id/btnSummary"
                 android:layout_width="wrap_content"
                 android:layout_height="32dp"
