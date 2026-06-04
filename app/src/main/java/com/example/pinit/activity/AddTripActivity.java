@@ -13,7 +13,10 @@ import com.example.pinit.R;
 import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.Trip;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.Locale;
 
 public class AddTripActivity extends AppCompatActivity {
@@ -68,6 +71,15 @@ public class AddTripActivity extends AppCompatActivity {
             Toast.makeText(this, "여행 이름과 목적지를 입력해주세요.", Toast.LENGTH_SHORT).show();
             return;
         }
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.KOREA);
+            Date start = sdf.parse(etStartDate.getText().toString());
+            Date end = sdf.parse(etEndDate.getText().toString());
+            if (start != null && end != null && start.after(end)) {
+                Toast.makeText(this, "출발일이 귀국일보다 늦을 수 없습니다.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        } catch (ParseException ignored) {}
         Trip t = new Trip();
         t.setTitle(title);
         t.setDestination(destination);
