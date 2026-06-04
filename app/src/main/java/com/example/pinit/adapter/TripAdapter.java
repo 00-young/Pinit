@@ -81,7 +81,7 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
             context.startActivity(intent);
         });
 
-// 여행요약 → TripSummaryActivity (★ 변경)
+        // 여행요약 → TripSummaryActivity (★ 변경)
         holder.btnSummary.setOnClickListener(v -> {
             Intent intent = new Intent(context, TripSummaryActivity.class);
             intent.putExtra("trip_id", t.getId());

@@ -162,6 +162,12 @@ public class FirestoreRepository {
                 .addOnSuccessListener(unused -> {
                     Log.d(TAG,
                             "Item 업로드 성공");
+                    db.collection("schedules")
+                            .document(scheduleId)
+                            .update(
+                                    "latitude", schedule.getLatitude(),
+                                    "longitude", schedule.getLongitude()
+                            );
                 })
                 .addOnFailureListener(e -> {
                     Log.e(TAG,
@@ -252,6 +258,7 @@ public class FirestoreRepository {
             String title,
             String startDate,
             String endDate,
+            String city,
             double totalBudget
     ) {
 
@@ -260,6 +267,7 @@ public class FirestoreRepository {
         updates.put("title", title);
         updates.put("startDate", startDate);
         updates.put("endDate", endDate);
+        updates.put("city", city);
         updates.put("totalBudget", totalBudget);
 
         db.collection("schedules")

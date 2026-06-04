@@ -206,9 +206,9 @@ public class AddScheduleActivity extends AppCompatActivity {
 
             s.setId((int) insertedId);
 
-        // =========================
-        // Firestore 업로드
-        // =========================
+            // =========================
+            // Firestore 업로드
+            // =========================
 
             FirebaseUser user =
                     FirebaseAuth.getInstance()
