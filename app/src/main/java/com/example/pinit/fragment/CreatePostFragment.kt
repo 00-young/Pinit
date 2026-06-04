@@ -33,6 +33,7 @@ import com.example.pinit.model.DailySchedule
 import com.example.pinit.model.MyPlan
 import com.example.pinit.model.map.MapData
 import com.example.pinit.model.map.MapMarker
+import com.example.pinit.index.SearchIndex
 import com.example.pinit.model.post.ContentBlock
 import com.example.pinit.model.post.EditorBlock
 import com.example.pinit.model.post.Post
@@ -106,6 +107,11 @@ class CreatePostFragment : Fragment() {
     private var editPostId: String? = null
     private val isEditMode: Boolean get() = editPostId != null
 
+    // 여행 설정 값 보관 (검색 인덱스 저장용)
+    private var travelSelectedDate: String? = null
+    private var travelSelectedCountry: String? = null
+    private var travelSelectedPeople: String? = null
+
     private data class PendingImage(val editor: EditorBlock, val uri: Uri)
 
     companion object {
@@ -133,9 +139,19 @@ class CreatePostFragment : Fragment() {
                 val data = result.data!!
                 layoutTravelSettingTagsContainer?.let { container ->
                     container.removeAllViews()
-                    addTravelSettingTag(data.getStringExtra("selectedDate"))
-                    addTravelSettingTag(data.getStringExtra("selectedCountry"))
-                    addTravelSettingTag(data.getStringExtra("selectedPeople"))
+                    val selectedDate = data.getStringExtra("selectedDate")
+                    val selectedCountry = data.getStringExtra("selectedCountry")
+                    val selectedPeople = data.getStringExtra("selectedPeople")
+                    // 검색 인덱스 저장용으로 보관
+                    travelSelectedDate = selectedDate
+                    travelSelectedCountry = selectedCountry
+                    travelSelectedPeople = selectedPeople
+
+                    addTravelSettingTag(selectedDate)
+                    addTravelSettingTag(selectedCountry)
+                    addTravelSettingTag(selectedPeople)
+                    // 날짜 범위로 "N박 M일" 자동 태그 추가
+                    addTravelSettingTag(durationTag(selectedDate))
                 }
             }
         }
@@ -409,7 +425,12 @@ class CreatePostFragment : Fragment() {
             tag = editor
             setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
         }
-        if (atCursor) addBlockAtCursor(et) else container.addView(et)
+        if (atCursor) {
+            addBlockAtCursor(et)
+        } else {
+            container.addView(et)
+            enableLongPressDelete(et)
+        }
     }
 
     // =====================================================
@@ -802,23 +823,49 @@ class CreatePostFragment : Fragment() {
         val successMsg = if (isEditMode) "수정 완료" else "업로드 성공"
         val failMsg = if (isEditMode) "수정 실패" else "업로드 실패"
 
+        // 검색 인덱스 구성: 본문 텍스트, 여행설정(날짜/국가/인원), 해시태그 수집
+        val contentText = editors
+            .filter { it.type == ContentBlock.TYPE_TEXT }
+            .joinToString(" ") { it.text }
+            .trim()
+        val (startDate, endDate) = parseDateRange(travelSelectedDate) ?: ("" to "")
+        val hashtags = collectHashtags().toMutableList()
+        // N박M일 태그를 검색 인덱스에도 포함
+        durationTag(travelSelectedDate)?.let { if (!hashtags.contains(it)) hashtags.add(it) }
+
+        val buildIndex: (String) -> SearchIndex = { imageUrl ->
+            SearchIndex(
+                postId = post.postId,
+                title = post.title,
+                content = contentText,
+                userNickname = post.userNickname,
+                mainTheme = hashtags.firstOrNull() ?: "",
+                hashtags = hashtags,
+                country = travelSelectedCountry ?: "",
+                city = "",
+                travelerCount = peopleToCount(travelSelectedPeople),
+                startDate = startDate,
+                endDate = endDate,
+                postImageUrl = imageUrl,
+                createdAt = System.currentTimeMillis()
+            )
+        }
+
         if (thumbnailUri != null) {
-            // 새 갤러리 이미지를 썸네일로 업로드
             if (isEditMode) {
                 postRepository.updatePost(
                     post, thumbnailUri!!, blocks,
-                    { onSaveSuccess(successMsg) },
+                    { postRepository.saveSearchIndex(buildIndex(post.thumbnailImageUrl)); onSaveSuccess(successMsg) },
                     { onSaveFailure(failMsg) }
                 )
             } else {
                 postRepository.uploadPost(
                     post, thumbnailUri!!, blocks,
-                    { onSaveSuccess(successMsg) },
+                    { postRepository.saveSearchIndex(buildIndex(post.thumbnailImageUrl)); onSaveSuccess(successMsg) },
                     { onSaveFailure(failMsg) }
                 )
             }
         } else {
-            // 썸네일 Uri 없음: staticMapUrl(또는 수정 모드의 기존 이미지 URL)을 썸네일로 사용
             val postWithThumb = post.copy(
                 thumbnailImageUrl = staticMapUrl ?: "",
                 postImageType = if (staticMapUrl != null && staticMapUrl.contains("staticmap")) "map" else "image"
@@ -826,13 +873,13 @@ class CreatePostFragment : Fragment() {
             if (isEditMode) {
                 postRepository.updatePostWithoutThumbnail(
                     postWithThumb, blocks,
-                    { onSaveSuccess(successMsg) },
+                    { postRepository.saveSearchIndex(buildIndex(postWithThumb.thumbnailImageUrl)); onSaveSuccess(successMsg) },
                     { onSaveFailure(failMsg) }
                 )
             } else {
                 postRepository.uploadPostWithoutThumbnail(
                     postWithThumb, blocks,
-                    { onSaveSuccess(successMsg) },
+                    { postRepository.saveSearchIndex(buildIndex(postWithThumb.thumbnailImageUrl)); onSaveSuccess(successMsg) },
                     { onSaveFailure(failMsg) }
                 )
             }
@@ -871,6 +918,68 @@ class CreatePostFragment : Fragment() {
         layoutTravelSettingTagsContainer?.addView(tvTag)
     }
 
+    // =====================================================
+    // 여행 설정 → 검색 인덱스 변환 헬퍼
+    // =====================================================
+
+    /** "2026/05/01 ~ 2026/05/03" → "2박 3일" / "2026/05/01" → "당일치기" / 못 읽으면 null */
+    private fun durationTag(selectedDate: String?): String? {
+        val (start, end) = parseDateRange(selectedDate) ?: return null
+        val nights = dayDiff(start, end)
+        return when {
+            nights <= 0 -> "당일치기"
+            else -> "${nights}박 ${nights + 1}일"
+        }
+    }
+
+    /** "2026/05/01 ~ 2026/05/03" → Pair("2026-05-01","2026-05-03"). 단일 날짜면 시작=종료. */
+    private fun parseDateRange(selectedDate: String?): Pair<String, String>? {
+        if (selectedDate.isNullOrBlank() || selectedDate == "날짜를 선택하세요") return null
+        val parts = selectedDate.split("~")
+        val startRaw = parts.getOrNull(0)?.trim() ?: return null
+        val endRaw = parts.getOrNull(1)?.trim() ?: startRaw
+        val start = startRaw.replace("/", "-")
+        val end = endRaw.replace("/", "-")
+        if (start.isEmpty()) return null
+        return start to end
+    }
+
+    /** yyyy-MM-dd 두 날짜의 일수 차이 (end - start). 파싱 실패 시 0 */
+    private fun dayDiff(start: String, end: String): Long {
+        return try {
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+            val s = fmt.parse(start)?.time ?: return 0
+            val e = fmt.parse(end)?.time ?: return 0
+            (e - s) / (24L * 60 * 60 * 1000)
+        } catch (ex: Exception) {
+            0
+        }
+    }
+
+    /** "혼자"→1, "2명"→2 처럼 숫자가 명시된 인원만 변환. 그 외("3~4명","가족" 등)는 0(미지정) */
+    private fun peopleToCount(people: String?): Long {
+        if (people.isNullOrBlank()) return 0
+        return when (people.trim()) {
+            "혼자" -> 1
+            "2명" -> 2
+            else -> 0  // "3~4명", "가족" 등은 숫자 미지정
+        }
+    }
+
+    /** 화면의 해시태그 칩(layoutTagsContainer)에서 태그 문자열들을 수집 */
+    private fun collectHashtags(): List<String> {
+        val container = layoutTagsContainer ?: return emptyList()
+        val tags = mutableListOf<String>()
+        for (i in 0 until container.childCount) {
+            val v = container.getChildAt(i)
+            if (v is TextView) {
+                val t = v.text?.toString()?.trim()
+                if (!t.isNullOrEmpty()) tags.add(t.removePrefix("#"))
+            }
+        }
+        return tags
+    }
+
     private fun calculateTotalBudget() {
         val total = parseBudgetNumber(etBudgetFood.text.toString()) +
                 parseBudgetNumber(etBudgetTransport.text.toString()) +
@@ -904,6 +1013,7 @@ class CreatePostFragment : Fragment() {
             setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
         }
         container.addView(editText)
+        enableLongPressDelete(editText)
     }
 
     private fun dp(value: Int): Int = Math.round(value * resources.displayMetrics.density)
@@ -928,8 +1038,29 @@ class CreatePostFragment : Fragment() {
         val container = layoutDynamicContent ?: return
         val index = insertIndex()
         container.addView(viewToAdd, index)
+        enableLongPressDelete(viewToAdd) // 길게 눌러 삭제
         // 다음 삽입이 방금 넣은 블록 뒤로 이어지도록 기준 갱신
         lastFocusedBlock = viewToAdd
+    }
+
+    /**
+     * 블록을 길게 누르면 삭제 확인 팝업을 띄우고, 확인 시 컨테이너에서 제거한다.
+     * 모든 블록(텍스트/이미지/place/map) 생성 시 호출.
+     */
+    private fun enableLongPressDelete(blockView: View) {
+        blockView.setOnLongClickListener {
+            androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("블록 삭제")
+                .setMessage("이 블록을 삭제하시겠습니까?")
+                .setPositiveButton("삭제") { _, _ ->
+                    layoutDynamicContent?.removeView(blockView)
+                    // 삭제된 블록이 삽입 기준이었다면 기준 초기화
+                    if (lastFocusedBlock == blockView) lastFocusedBlock = null
+                }
+                .setNegativeButton("취소", null)
+                .show()
+            true
+        }
     }
 
     // =====================================================
@@ -994,6 +1125,7 @@ class CreatePostFragment : Fragment() {
             setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
         }
         container.addView(et)
+        enableLongPressDelete(et)
         lastFocusedBlock = et
     }
 
@@ -1015,6 +1147,7 @@ class CreatePostFragment : Fragment() {
         }
         Glide.with(this).load(imageUrl).into(iv)
         container.addView(iv)
+        enableLongPressDelete(iv)
         lastFocusedBlock = iv
 
         // 수정 모드의 썸네일: 첫 이미지를 기준으로 삼되, 기존 URL 기반이라
@@ -1031,6 +1164,7 @@ class CreatePostFragment : Fragment() {
         )
         val placeView = buildPlaceHeaderView(placeName, placeAddress, editor)
         container.addView(placeView)
+        enableLongPressDelete(placeView)
         lastFocusedBlock = placeView
     }
 
@@ -1089,6 +1223,7 @@ class CreatePostFragment : Fragment() {
 
         mapBlockView.tag = editor
         container.addView(mapBlockView)
+        enableLongPressDelete(mapBlockView)
         lastFocusedBlock = mapBlockView
     }
 

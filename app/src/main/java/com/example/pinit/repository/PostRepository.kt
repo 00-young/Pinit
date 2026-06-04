@@ -1,6 +1,7 @@
 package com.example.pinit.repository
 
 import android.net.Uri
+import com.example.pinit.index.SearchIndex
 import com.example.pinit.model.post.ContentBlock
 import com.example.pinit.model.post.Post
 import com.google.firebase.firestore.FirebaseFirestore
@@ -11,6 +12,23 @@ class PostRepository {
 
     private val db = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
+
+    /**
+     * 검색 인덱스(searchIndexPosts) 저장/갱신.
+     * postId 를 문서 ID 로 써서 게시물과 1:1 매핑. 신규/수정 모두 set 으로 덮어쓰기.
+     */
+    fun saveSearchIndex(searchIndex: SearchIndex) {
+        if (searchIndex.postId.isEmpty()) return
+        db.collection("searchIndexPosts")
+            .document(searchIndex.postId)
+            .set(searchIndex)
+    }
+
+    /** 게시물 삭제 시 검색 인덱스도 함께 제거 */
+    fun deleteSearchIndex(postId: String) {
+        if (postId.isEmpty()) return
+        db.collection("searchIndexPosts").document(postId).delete()
+    }
 
     /**
      * 썸네일 이미지(Uri)를 Storage 에 올린 뒤, 그 URL 을 넣어 Post + contentBlocks 저장.
