@@ -252,6 +252,7 @@ public class FirestoreRepository {
             String title,
             String startDate,
             String endDate,
+            String city,
             double totalBudget
     ) {
 
@@ -260,6 +261,7 @@ public class FirestoreRepository {
         updates.put("title", title);
         updates.put("startDate", startDate);
         updates.put("endDate", endDate);
+        updates.put("city", city);
         updates.put("totalBudget", totalBudget);
 
         db.collection("schedules")

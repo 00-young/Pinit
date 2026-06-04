@@ -12,6 +12,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
+import com.example.pinit.activity.AddTripActivity;
 import com.example.pinit.activity.TripDetailActivity;
 import com.example.pinit.activity.TripSummaryActivity;
 import com.example.pinit.model.Trip;
@@ -86,10 +87,12 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
 
             Intent intent =
                     new Intent(context,
-                            TripDetailActivity.class);
+                            AddTripActivity.class);
 
-            intent.putExtra("trip_id", t.getId());
-            intent.putExtra("open_edit", true);
+            intent.putExtra(
+                    "edit_trip_id",
+                    t.getId()
+            );
 
             context.startActivity(intent);
         });
