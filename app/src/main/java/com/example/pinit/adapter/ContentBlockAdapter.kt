@@ -44,6 +44,7 @@ class ContentBlockAdapter(
         private const val VIEW_IMAGE = 1
         private const val VIEW_PLACE = 2
         private const val VIEW_MAP = 3
+        private const val VIEW_BUDGET = 4
     }
 
     override fun getItemViewType(position: Int): Int =
@@ -51,6 +52,7 @@ class ContentBlockAdapter(
             ContentBlock.TYPE_IMAGE -> VIEW_IMAGE
             ContentBlock.TYPE_PLACE -> VIEW_PLACE
             ContentBlock.TYPE_MAP -> VIEW_MAP
+            ContentBlock.TYPE_BUDGET -> VIEW_BUDGET
             else -> VIEW_TEXT
         }
 
@@ -60,6 +62,7 @@ class ContentBlockAdapter(
             VIEW_IMAGE -> ImageVH(inflater.inflate(R.layout.item_block_image, parent, false))
             VIEW_PLACE -> PlaceVH(inflater.inflate(R.layout.item_block_place, parent, false))
             VIEW_MAP -> MapVH(inflater.inflate(R.layout.item_block_map, parent, false))
+            VIEW_BUDGET -> BudgetVH(inflater.inflate(R.layout.item_block_budget, parent, false))
             else -> TextVH(inflater.inflate(R.layout.item_block_text, parent, false))
         }
     }
@@ -71,6 +74,7 @@ class ContentBlockAdapter(
             is ImageVH -> holder.bind(block)
             is PlaceVH -> holder.bind(block)
             is MapVH -> holder.bind(block)
+            is BudgetVH -> holder.bind(block)
         }
     }
 
@@ -154,6 +158,28 @@ class ContentBlockAdapter(
                     drawMapData(googleMap, b.mapData)
                 }
             }
+        }
+    }
+
+    /** budget 블록: 항목별 예산 + 총합 (만원 단위) */
+    class BudgetVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val tvTotal: TextView = itemView.findViewById(R.id.tvBlockBudgetTotal)
+        private val tvFood: TextView = itemView.findViewById(R.id.tvBlockBudgetFood)
+        private val tvTransport: TextView = itemView.findViewById(R.id.tvBlockBudgetTransport)
+        private val tvAccom: TextView = itemView.findViewById(R.id.tvBlockBudgetAccom)
+        private val tvShopping: TextView = itemView.findViewById(R.id.tvBlockBudgetShopping)
+        private val tvSightseeing: TextView = itemView.findViewById(R.id.tvBlockBudgetSightseeing)
+        private val tvEtc: TextView = itemView.findViewById(R.id.tvBlockBudgetEtc)
+        fun bind(b: ContentBlock) {
+            val total = b.budgetFood + b.budgetTransport + b.budgetAccom +
+                    b.budgetShopping + b.budgetSightseeing + b.budgetEtc
+            tvTotal.text = "총 ${total}만원"
+            tvFood.text = b.budgetFood.toString()
+            tvTransport.text = b.budgetTransport.toString()
+            tvAccom.text = b.budgetAccom.toString()
+            tvShopping.text = b.budgetShopping.toString()
+            tvSightseeing.text = b.budgetSightseeing.toString()
+            tvEtc.text = b.budgetEtc.toString()
         }
     }
 }
