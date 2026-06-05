@@ -44,6 +44,8 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
         notifyDataSetChanged();
     }
 
+    public Trip getItem(int position) { return list.get(position); }
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {

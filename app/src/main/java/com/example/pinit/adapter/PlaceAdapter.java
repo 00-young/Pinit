@@ -13,6 +13,10 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.target.Target;
+import com.facebook.shimmer.ShimmerFrameLayout;
 import com.example.pinit.database.PlacesApiHelper;
 
 import androidx.annotation.NonNull;
@@ -86,12 +90,33 @@ public class PlaceAdapter extends RecyclerView.Adapter<PlaceAdapter.ViewHolder> 
 
         String photoRef = place.getOrDefault("photo_reference", "");
         if (!photoRef.isEmpty()) {
+            holder.shimmerPhoto.startShimmer();
             String photoUrl = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference="
                     + photoRef + "&key=" + PlacesApiHelper.API_KEY;
-            Glide.with(context).load(photoUrl).centerCrop().into(holder.ivPlacePhoto);
+            Glide.with(context)
+                    .load(photoUrl)
+                    .centerCrop()
+                    .transition(DrawableTransitionOptions.withCrossFade())
+                    .listener(new RequestListener<android.graphics.drawable.Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(com.bumptech.glide.load.engine.GlideException e,
+                                Object model, Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
+                            holder.shimmerPhoto.stopShimmer();
+                            return false;
+                        }
+                        @Override
+                        public boolean onResourceReady(android.graphics.drawable.Drawable resource,
+                                Object model, Target<android.graphics.drawable.Drawable> target,
+                                com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
+                            holder.shimmerPhoto.stopShimmer();
+                            return false;
+                        }
+                    })
+                    .into(holder.ivPlacePhoto);
         } else {
+            holder.shimmerPhoto.stopShimmer();
             holder.ivPlacePhoto.setImageDrawable(null);
-            holder.ivPlacePhoto.setBackgroundColor(0xFFFAFAFA);
+            holder.ivPlacePhoto.setBackgroundColor(0xFFE0E0E0);
         }
         String rating = place.getOrDefault("rating", "");
         String total = place.getOrDefault("user_ratings_total", "0");
@@ -212,11 +237,13 @@ public class PlaceAdapter extends RecyclerView.Adapter<PlaceAdapter.ViewHolder> 
     static class ViewHolder extends RecyclerView.ViewHolder {
         TextView tvName, tvAddress, tvRating, tvStatus;
         ImageView ivPlacePhoto;
+        ShimmerFrameLayout shimmerPhoto;
 
         ViewHolder(View view) {
             super(view);
             tvName = view.findViewById(R.id.tvName);
             tvAddress = view.findViewById(R.id.tvAddress);
+            shimmerPhoto = view.findViewById(R.id.shimmerPhoto);
             tvRating = view.findViewById(R.id.tvRating);
             tvStatus = view.findViewById(R.id.tvStatus);
             ivPlacePhoto = view.findViewById(R.id.ivPlacePhoto);
