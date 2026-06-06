@@ -72,19 +72,10 @@ class CreatePostFragment : Fragment() {
     private lateinit var placeSearchLauncher: ActivityResultLauncher<Intent>
 
     private var layoutDynamicContent: LinearLayout? = null
-    private var layoutImportedBudget: LinearLayout? = null
     private var layoutTagsContainer: LinearLayout? = null
     private var layoutTravelSettingTagsContainer: LinearLayout? = null
     private var ivSelectedPhoto: ImageView? = null
     private var spinnerVisibility: Spinner? = null
-
-    private lateinit var tvTotalBudget: TextView
-    private lateinit var etBudgetFood: EditText
-    private lateinit var etBudgetTransport: EditText
-    private lateinit var etBudgetAccom: EditText
-    private lateinit var etBudgetShopping: EditText
-    private lateinit var etBudgetSightseeing: EditText
-    private lateinit var etBudgetEtc: EditText
 
     private fun interface GeocodeCallback {
         fun onResult(latLng: LatLng?)
@@ -202,16 +193,15 @@ class CreatePostFragment : Fragment() {
         }
 
         parentFragmentManager.setFragmentResultListener("budgetResult", this) { _, bundle ->
-            layoutImportedBudget?.let {
-                it.visibility = View.VISIBLE
-                etBudgetFood.setText(bundle.getInt("budgetFood", 0).toString())
-                etBudgetTransport.setText(bundle.getInt("budgetTransport", 0).toString())
-                etBudgetAccom.setText(bundle.getInt("budgetAccom", 0).toString())
-                etBudgetShopping.setText(bundle.getInt("budgetShopping", 0).toString())
-                etBudgetSightseeing.setText(bundle.getInt("budgetSightseeing", 0).toString())
-                etBudgetEtc.setText(bundle.getInt("budgetEtc", 0).toString())
-                calculateTotalBudget()
-            }
+            // 예산을 본문에 동적 블록으로 삽입 (다른 블록과 동일)
+            insertBudgetBlock(
+                food = bundle.getInt("budgetFood", 0),
+                transport = bundle.getInt("budgetTransport", 0),
+                accom = bundle.getInt("budgetAccom", 0),
+                shopping = bundle.getInt("budgetShopping", 0),
+                sightseeing = bundle.getInt("budgetSightseeing", 0),
+                etc = bundle.getInt("budgetEtc", 0)
+            )
         }
     }
 
@@ -245,6 +235,48 @@ class CreatePostFragment : Fragment() {
         }
         // 이미지 바로 뒤에 이어 쓸 텍스트 블록
         addCommentBlockAtCursor("내용을 입력하세요")
+    }
+
+    /** 예산 블록을 본문에 삽입 (item_block_budget.xml 재사용). 다른 블록과 동일하게 동작 */
+    private fun insertBudgetBlock(
+        food: Int, transport: Int, accom: Int,
+        shopping: Int, sightseeing: Int, etc: Int
+    ) {
+        val container = layoutDynamicContent ?: return
+
+        val editor = EditorBlock(
+            id = UUID.randomUUID().toString(),
+            type = ContentBlock.TYPE_BUDGET,
+            budgetFood = food,
+            budgetTransport = transport,
+            budgetAccom = accom,
+            budgetShopping = shopping,
+            budgetSightseeing = sightseeing,
+            budgetEtc = etc
+        )
+
+        val budgetView = layoutInflater.inflate(R.layout.item_block_budget, container, false)
+        bindBudgetView(budgetView, food, transport, accom, shopping, sightseeing, etc)
+        budgetView.tag = editor
+
+        addBlockAtCursor(budgetView)
+        // 예산 블록 뒤에 이어 쓸 텍스트 블록
+        addCommentBlockAtCursor("내용을 입력하세요")
+    }
+
+    /** 예산 뷰의 TextView들에 값 채우기 (작성/복원 공용) */
+    private fun bindBudgetView(
+        v: View, food: Int, transport: Int, accom: Int,
+        shopping: Int, sightseeing: Int, etc: Int
+    ) {
+        val total = food + transport + accom + shopping + sightseeing + etc
+        v.findViewById<TextView>(R.id.tvBlockBudgetTotal).text = "총 ${total}만원"
+        v.findViewById<TextView>(R.id.tvBlockBudgetFood).text = food.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetTransport).text = transport.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetAccom).text = accom.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetShopping).text = shopping.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetSightseeing).text = sightseeing.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetEtc).text = etc.toString()
     }
 
     /** 단독 place 블록 (장소 검색으로 직접 추가) */
@@ -535,36 +567,13 @@ class CreatePostFragment : Fragment() {
         val view = inflater.inflate(R.layout.fragment_create_post, container, false)
 
         layoutDynamicContent = view.findViewById(R.id.layoutDynamicContent)
-        layoutImportedBudget = view.findViewById(R.id.layoutImportedBudget)
         layoutTagsContainer = view.findViewById(R.id.layoutTagsContainer)
         layoutTravelSettingTagsContainer = view.findViewById(R.id.layoutTravelSettingTagsContainer)
         ivSelectedPhoto = view.findViewById(R.id.ivSelectedPhoto)
 
-        tvTotalBudget = view.findViewById(R.id.tvTotalBudget)
-        etBudgetAccom = view.findViewById(R.id.etBudgetAccom)
-        etBudgetTransport = view.findViewById(R.id.etBudgetTransport)
-        etBudgetFood = view.findViewById(R.id.etBudgetFood)
-        etBudgetShopping = view.findViewById(R.id.etBudgetShopping)
-        etBudgetSightseeing = view.findViewById(R.id.etBudgetSightseeing)
-        etBudgetEtc = view.findViewById(R.id.etBudgetEtc)
-
         etPostTitle = view.findViewById(R.id.etPostTitle)
         btnUpload = view.findViewById(R.id.btnRegister)
         btnUpload.setOnClickListener { uploadPost() }
-
-        val budgetWatcher = object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                calculateTotalBudget()
-            }
-        }
-        etBudgetFood.addTextChangedListener(budgetWatcher)
-        etBudgetTransport.addTextChangedListener(budgetWatcher)
-        etBudgetAccom.addTextChangedListener(budgetWatcher)
-        etBudgetShopping.addTextChangedListener(budgetWatcher)
-        etBudgetSightseeing.addTextChangedListener(budgetWatcher)
-        etBudgetEtc.addTextChangedListener(budgetWatcher)
 
         spinnerVisibility = view.findViewById(R.id.spinnerVisibility)
         val visibilityItems = arrayOf("전체공개", "나만보기")
@@ -696,7 +705,7 @@ class CreatePostFragment : Fragment() {
                                 )
                             }
                         }
-                        // place / map 은 데이터가 이미 채워져 있음
+                        // place / map / budget 은 데이터가 이미 채워져 있음
                     }
                     editor.sortOrder = order++
                     editors.add(editor)
@@ -1023,23 +1032,6 @@ class CreatePostFragment : Fragment() {
         return selectedHashtags.toList()
     }
 
-    private fun calculateTotalBudget() {
-        val total = parseBudgetNumber(etBudgetFood.text.toString()) +
-                parseBudgetNumber(etBudgetTransport.text.toString()) +
-                parseBudgetNumber(etBudgetAccom.text.toString()) +
-                parseBudgetNumber(etBudgetShopping.text.toString()) +
-                parseBudgetNumber(etBudgetSightseeing.text.toString()) +
-                parseBudgetNumber(etBudgetEtc.text.toString())
-        tvTotalBudget.text = "총 ${total}만원"
-    }
-
-    private fun parseBudgetNumber(text: String?): Int =
-        try {
-            if (text.isNullOrBlank()) 0 else text.trim().toInt()
-        } catch (e: NumberFormatException) {
-            0
-        }
-
     private fun addTextBlock() {
         val container = layoutDynamicContent ?: return
         val editor = EditorBlock(id = UUID.randomUUID().toString(), type = ContentBlock.TYPE_TEXT)
@@ -1188,7 +1180,32 @@ class CreatePostFragment : Fragment() {
             ContentBlock.TYPE_IMAGE -> restoreImageBlock(block.imageUrl, block.textContent)
             ContentBlock.TYPE_PLACE -> restorePlaceBlock(block.placeName, block.placeAddress)
             ContentBlock.TYPE_MAP -> restoreMapBlock(block)
+            ContentBlock.TYPE_BUDGET -> restoreBudgetBlock(block)
         }
+    }
+
+    /** 수정 모드: 저장된 예산 블록을 작성 화면에 복원 */
+    private fun restoreBudgetBlock(block: ContentBlock) {
+        val container = layoutDynamicContent ?: return
+        val editor = EditorBlock(
+            id = block.blockId.ifEmpty { UUID.randomUUID().toString() },
+            type = ContentBlock.TYPE_BUDGET,
+            budgetFood = block.budgetFood,
+            budgetTransport = block.budgetTransport,
+            budgetAccom = block.budgetAccom,
+            budgetShopping = block.budgetShopping,
+            budgetSightseeing = block.budgetSightseeing,
+            budgetEtc = block.budgetEtc
+        )
+        val budgetView = layoutInflater.inflate(R.layout.item_block_budget, container, false)
+        bindBudgetView(
+            budgetView, block.budgetFood, block.budgetTransport, block.budgetAccom,
+            block.budgetShopping, block.budgetSightseeing, block.budgetEtc
+        )
+        budgetView.tag = editor
+        container.addView(budgetView)
+        enableLongPressDelete(budgetView)
+        lastFocusedBlock = budgetView
     }
 
     private fun restoreTextBlock(text: String) {

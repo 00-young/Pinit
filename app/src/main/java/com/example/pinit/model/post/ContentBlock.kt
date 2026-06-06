@@ -31,6 +31,14 @@ data class ContentBlock(
     val date: String = "",              // map 블록의 날짜 (담기 시 사용)
     val dayTitle: String = "",          // map 블록의 "DAY 1" 등
 
+    // budget 블록 (지출 예산, 만원 단위)
+    val budgetFood: Int = 0,
+    val budgetTransport: Int = 0,
+    val budgetAccom: Int = 0,
+    val budgetShopping: Int = 0,
+    val budgetSightseeing: Int = 0,
+    val budgetEtc: Int = 0,
+
     val sortOrder: Int = 0
 ) {
     companion object {
@@ -38,6 +46,7 @@ data class ContentBlock(
         const val TYPE_IMAGE = "image"
         const val TYPE_PLACE = "place"
         const val TYPE_MAP = "map"
+        const val TYPE_BUDGET = "budget"
 
         /** 작성용 EditorBlock → 저장용 ContentBlock 변환 */
         fun from(editor: EditorBlock): ContentBlock = ContentBlock(
@@ -50,6 +59,12 @@ data class ContentBlock(
             mapData = editor.mapData,
             date = editor.date,
             dayTitle = editor.dayTitle,
+            budgetFood = editor.budgetFood,
+            budgetTransport = editor.budgetTransport,
+            budgetAccom = editor.budgetAccom,
+            budgetShopping = editor.budgetShopping,
+            budgetSightseeing = editor.budgetSightseeing,
+            budgetEtc = editor.budgetEtc,
             sortOrder = editor.sortOrder
         )
     }
