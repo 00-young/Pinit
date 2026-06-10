@@ -33,6 +33,7 @@ import com.example.pinit.model.DailySchedule
 import com.example.pinit.model.MyPlan
 import com.example.pinit.model.map.MapData
 import com.example.pinit.model.map.MapMarker
+import com.example.pinit.index.SearchIndex
 import com.example.pinit.model.post.ContentBlock
 import com.example.pinit.model.post.EditorBlock
 import com.example.pinit.model.post.Post
@@ -71,19 +72,10 @@ class CreatePostFragment : Fragment() {
     private lateinit var placeSearchLauncher: ActivityResultLauncher<Intent>
 
     private var layoutDynamicContent: LinearLayout? = null
-    private var layoutImportedBudget: LinearLayout? = null
     private var layoutTagsContainer: LinearLayout? = null
     private var layoutTravelSettingTagsContainer: LinearLayout? = null
     private var ivSelectedPhoto: ImageView? = null
     private var spinnerVisibility: Spinner? = null
-
-    private lateinit var tvTotalBudget: TextView
-    private lateinit var etBudgetFood: EditText
-    private lateinit var etBudgetTransport: EditText
-    private lateinit var etBudgetAccom: EditText
-    private lateinit var etBudgetShopping: EditText
-    private lateinit var etBudgetSightseeing: EditText
-    private lateinit var etBudgetEtc: EditText
 
     private fun interface GeocodeCallback {
         fun onResult(latLng: LatLng?)
@@ -105,6 +97,14 @@ class CreatePostFragment : Fragment() {
     // 수정 모드 (게시물 상세 → 수정으로 진입 시)
     private var editPostId: String? = null
     private val isEditMode: Boolean get() = editPostId != null
+
+    // 여행 설정 값 보관 (검색 인덱스 저장용)
+    private var travelSelectedDate: String? = null
+    private var travelSelectedCountry: String? = null
+    private var travelSelectedPeople: String? = null
+
+    // 현재 선택된 해시태그 목록 (자동계산 태그 + 사용자 선택 태그)
+    private val selectedHashtags = linkedSetOf<String>()
 
     private data class PendingImage(val editor: EditorBlock, val uri: Uri)
 
@@ -133,9 +133,24 @@ class CreatePostFragment : Fragment() {
                 val data = result.data!!
                 layoutTravelSettingTagsContainer?.let { container ->
                     container.removeAllViews()
-                    addTravelSettingTag(data.getStringExtra("selectedDate"))
-                    addTravelSettingTag(data.getStringExtra("selectedCountry"))
-                    addTravelSettingTag(data.getStringExtra("selectedPeople"))
+                    val selectedDate = data.getStringExtra("selectedDate")
+                    val selectedCountry = data.getStringExtra("selectedCountry")
+                    val selectedPeople = data.getStringExtra("selectedPeople")
+                    // 검색 인덱스 저장용으로 보관
+                    travelSelectedDate = selectedDate
+                    travelSelectedCountry = selectedCountry
+                    travelSelectedPeople = selectedPeople
+
+                    // 날짜/국가/인원은 여행설정 영역에 표시
+                    addTravelSettingTag(selectedDate)
+                    addTravelSettingTag(selectedCountry)
+                    addTravelSettingTag(selectedPeople)
+
+                    // "N박 M일"은 해시태그 칩으로 추가 (해시태그 선택 화면에서도 선택된 상태로 보이게)
+                    durationTag(selectedDate)?.let {
+                        selectedHashtags.add(it)
+                        renderHashtagChips()
+                    }
                 }
             }
         }
@@ -168,36 +183,25 @@ class CreatePostFragment : Fragment() {
         }
 
         parentFragmentManager.setFragmentResultListener("tagResult", this) { _, bundle ->
-            val selectedTags = bundle.getStringArrayList("selectedTags")
-            if (selectedTags != null && layoutTagsContainer != null) {
-                layoutTagsContainer!!.removeAllViews()
-                for (tag in selectedTags) {
-                    val tvTag = TextView(context).apply {
-                        text = "#$tag"
-                        setTextColor(0xFF000000.toInt())
-                        setBackgroundColor(0xFFEEEEEE.toInt())
-                        setPadding(32, 12, 32, 12)
-                        layoutParams = LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT
-                        ).apply { setMargins(0, 0, 16, 0) }
-                    }
-                    layoutTagsContainer!!.addView(tvTag)
-                }
+            val tags = bundle.getStringArrayList("selectedTags")
+            if (tags != null) {
+                // 선택 화면 결과로 해시태그 목록 교체 후 칩 다시 그리기
+                selectedHashtags.clear()
+                selectedHashtags.addAll(tags)
+                renderHashtagChips()
             }
         }
 
         parentFragmentManager.setFragmentResultListener("budgetResult", this) { _, bundle ->
-            layoutImportedBudget?.let {
-                it.visibility = View.VISIBLE
-                etBudgetFood.setText(bundle.getInt("budgetFood", 0).toString())
-                etBudgetTransport.setText(bundle.getInt("budgetTransport", 0).toString())
-                etBudgetAccom.setText(bundle.getInt("budgetAccom", 0).toString())
-                etBudgetShopping.setText(bundle.getInt("budgetShopping", 0).toString())
-                etBudgetSightseeing.setText(bundle.getInt("budgetSightseeing", 0).toString())
-                etBudgetEtc.setText(bundle.getInt("budgetEtc", 0).toString())
-                calculateTotalBudget()
-            }
+            // 예산을 본문에 동적 블록으로 삽입 (다른 블록과 동일)
+            insertBudgetBlock(
+                food = bundle.getInt("budgetFood", 0),
+                transport = bundle.getInt("budgetTransport", 0),
+                accom = bundle.getInt("budgetAccom", 0),
+                shopping = bundle.getInt("budgetShopping", 0),
+                sightseeing = bundle.getInt("budgetSightseeing", 0),
+                etc = bundle.getInt("budgetEtc", 0)
+            )
         }
     }
 
@@ -231,6 +235,48 @@ class CreatePostFragment : Fragment() {
         }
         // 이미지 바로 뒤에 이어 쓸 텍스트 블록
         addCommentBlockAtCursor("내용을 입력하세요")
+    }
+
+    /** 예산 블록을 본문에 삽입 (item_block_budget.xml 재사용). 다른 블록과 동일하게 동작 */
+    private fun insertBudgetBlock(
+        food: Int, transport: Int, accom: Int,
+        shopping: Int, sightseeing: Int, etc: Int
+    ) {
+        val container = layoutDynamicContent ?: return
+
+        val editor = EditorBlock(
+            id = UUID.randomUUID().toString(),
+            type = ContentBlock.TYPE_BUDGET,
+            budgetFood = food,
+            budgetTransport = transport,
+            budgetAccom = accom,
+            budgetShopping = shopping,
+            budgetSightseeing = sightseeing,
+            budgetEtc = etc
+        )
+
+        val budgetView = layoutInflater.inflate(R.layout.item_block_budget, container, false)
+        bindBudgetView(budgetView, food, transport, accom, shopping, sightseeing, etc)
+        budgetView.tag = editor
+
+        addBlockAtCursor(budgetView)
+        // 예산 블록 뒤에 이어 쓸 텍스트 블록
+        addCommentBlockAtCursor("내용을 입력하세요")
+    }
+
+    /** 예산 뷰의 TextView들에 값 채우기 (작성/복원 공용) */
+    private fun bindBudgetView(
+        v: View, food: Int, transport: Int, accom: Int,
+        shopping: Int, sightseeing: Int, etc: Int
+    ) {
+        val total = food + transport + accom + shopping + sightseeing + etc
+        v.findViewById<TextView>(R.id.tvBlockBudgetTotal).text = "총 ${total}만원"
+        v.findViewById<TextView>(R.id.tvBlockBudgetFood).text = food.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetTransport).text = transport.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetAccom).text = accom.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetShopping).text = shopping.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetSightseeing).text = sightseeing.toString()
+        v.findViewById<TextView>(R.id.tvBlockBudgetEtc).text = etc.toString()
     }
 
     /** 단독 place 블록 (장소 검색으로 직접 추가) */
@@ -409,7 +455,12 @@ class CreatePostFragment : Fragment() {
             tag = editor
             setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
         }
-        if (atCursor) addBlockAtCursor(et) else container.addView(et)
+        if (atCursor) {
+            addBlockAtCursor(et)
+        } else {
+            container.addView(et)
+            enableLongPressDelete(et)
+        }
     }
 
     // =====================================================
@@ -516,36 +567,13 @@ class CreatePostFragment : Fragment() {
         val view = inflater.inflate(R.layout.fragment_create_post, container, false)
 
         layoutDynamicContent = view.findViewById(R.id.layoutDynamicContent)
-        layoutImportedBudget = view.findViewById(R.id.layoutImportedBudget)
         layoutTagsContainer = view.findViewById(R.id.layoutTagsContainer)
         layoutTravelSettingTagsContainer = view.findViewById(R.id.layoutTravelSettingTagsContainer)
         ivSelectedPhoto = view.findViewById(R.id.ivSelectedPhoto)
 
-        tvTotalBudget = view.findViewById(R.id.tvTotalBudget)
-        etBudgetAccom = view.findViewById(R.id.etBudgetAccom)
-        etBudgetTransport = view.findViewById(R.id.etBudgetTransport)
-        etBudgetFood = view.findViewById(R.id.etBudgetFood)
-        etBudgetShopping = view.findViewById(R.id.etBudgetShopping)
-        etBudgetSightseeing = view.findViewById(R.id.etBudgetSightseeing)
-        etBudgetEtc = view.findViewById(R.id.etBudgetEtc)
-
         etPostTitle = view.findViewById(R.id.etPostTitle)
         btnUpload = view.findViewById(R.id.btnRegister)
         btnUpload.setOnClickListener { uploadPost() }
-
-        val budgetWatcher = object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                calculateTotalBudget()
-            }
-        }
-        etBudgetFood.addTextChangedListener(budgetWatcher)
-        etBudgetTransport.addTextChangedListener(budgetWatcher)
-        etBudgetAccom.addTextChangedListener(budgetWatcher)
-        etBudgetShopping.addTextChangedListener(budgetWatcher)
-        etBudgetSightseeing.addTextChangedListener(budgetWatcher)
-        etBudgetEtc.addTextChangedListener(budgetWatcher)
 
         spinnerVisibility = view.findViewById(R.id.spinnerVisibility)
         val visibilityItems = arrayOf("전체공개", "나만보기")
@@ -565,7 +593,8 @@ class CreatePostFragment : Fragment() {
             MyPlansBottomSheetFragment().show(parentFragmentManager, "MyPlansBottomSheet")
         }
         view.findViewById<View>(R.id.btnInsertTag).setOnClickListener {
-            TagBottomSheetFragment().show(parentFragmentManager, "TagBottomSheet")
+            TagBottomSheetFragment.newInstance(ArrayList(selectedHashtags))
+                .show(parentFragmentManager, "TagBottomSheet")
         }
         view.findViewById<View>(R.id.ivMenuPhoto).setOnClickListener {
             galleryLauncher.launch(
@@ -604,9 +633,15 @@ class CreatePostFragment : Fragment() {
 
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
         if (uid.isEmpty()) {
-            toast("로그인이 필요합니다"); return
+            toast("로그인이 필요합니다")
+            return
         }
+
         val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
+        if (userEmail.isEmpty()) {
+            toast("이메일 정보를 불러올 수 없습니다")
+            return
+        }
 
         // 중복 업로드 방지: 이미 업로드 중이면 무시
         if (isUploading) return
@@ -618,87 +653,114 @@ class CreatePostFragment : Fragment() {
         val visibility = if (spinnerVisibility?.selectedItem?.toString() == "나만보기")
             Post.VISIBILITY_PRIVATE else Post.VISIBILITY_PUBLIC
 
-        val nickname = FirebaseAuth.getInstance().currentUser?.email?.substringBefore("@") ?: "user"
+        FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(userEmail)
+            .get()
+            .addOnSuccessListener { document ->
 
-        val post = Post(
-            postId = postId,
-            userId = uid,
-            userNickname = nickname,
-            title = title,
-            postImageType = "image",
-            thumbnailImageUrl = "",
-            hashtags = listOf("여행"),
-            createdAt = Timestamp.now()
-        )
+                val nickname = document.getString("nickname")
+                    ?: FirebaseAuth.getInstance().currentUser?.email?.substringBefore("@")
+                    ?: "user"
 
-        val editors = mutableListOf<EditorBlock>()
-        val pendingImages = mutableListOf<PendingImage>()
-        var order = 0
+                val hashtags = collectHashtags().toMutableList()
+                durationTag(travelSelectedDate)?.let { if (!hashtags.contains(it)) hashtags.add(it) }
 
-        val content = layoutDynamicContent ?: return
-        for (i in 0 until content.childCount) {
-            val editor = content.getChildAt(i).tag as? EditorBlock ?: continue
-            when (editor.type) {
-                ContentBlock.TYPE_TEXT -> {
-                    val v = content.getChildAt(i)
-                    if (v is EditText) editor.text = v.text.toString().trim()
-                    if (editor.text.isEmpty()) continue
+                val post = Post(
+                    postId = postId,
+                    userId = uid,
+                    userEmail = userEmail,
+                    userNickname = nickname,
+                    title = title,
+                    postImageType = "image",
+                    thumbnailImageUrl = "",
+                    hashtags = hashtags,
+                    visibility = visibility,
+                    createdAt = Timestamp.now()
+                )
+
+                // ↓↓↓ 여기부터 기존 코드 그대로 ↓↓↓
+
+                val editors = mutableListOf<EditorBlock>()
+                val pendingImages = mutableListOf<PendingImage>()
+                var order = 0
+
+                val content = layoutDynamicContent ?: return@addOnSuccessListener
+                for (i in 0 until content.childCount) {
+                    val editor = content.getChildAt(i).tag as? EditorBlock ?: continue
+                    when (editor.type) {
+                        ContentBlock.TYPE_TEXT -> {
+                            val v = content.getChildAt(i)
+                            if (v is EditText) editor.text = v.text.toString().trim()
+                            if (editor.text.isEmpty()) continue
+                        }
+
+                        ContentBlock.TYPE_IMAGE -> {
+                            editor.localImageUri?.let {
+                                pendingImages.add(
+                                    PendingImage(
+                                        editor,
+                                        it
+                                    )
+                                )
+                            }
+                        }
+                        // place / map / budget 은 데이터가 이미 채워져 있음
+                    }
+                    editor.sortOrder = order++
+                    editors.add(editor)
                 }
 
-                ContentBlock.TYPE_IMAGE -> {
-                    editor.localImageUri?.let { pendingImages.add(PendingImage(editor, it)) }
+                // 갤러리 썸네일이 있으면 그대로 업로드
+                if (thumbnailUri != null) {
+                    setUploading(true)
+                    uploadImagesThenSave(post, editors, pendingImages, null)
+                    return@addOnSuccessListener
                 }
-                // place / map 은 데이터가 이미 채워져 있음
-            }
-            editor.sortOrder = order++
-            editors.add(editor)
-        }
 
-        // 갤러리 썸네일이 있으면 그대로 업로드
-        if (thumbnailUri != null) {
-            setUploading(true)
-            uploadImagesThenSave(post, editors, pendingImages, null)
-            return
-        }
+                // 수정 모드: 새 갤러리 이미지를 안 골랐으면, 본문의 기존 이미지 URL을 썸네일로 사용
+                if (isEditMode) {
+                    val existingImageUrl = editors.firstOrNull {
+                        it.type == ContentBlock.TYPE_IMAGE && it.imageUrl.isNotEmpty()
+                    }?.imageUrl
+                    if (existingImageUrl != null) {
+                        setUploading(true)
+                        uploadImagesThenSave(post, editors, pendingImages, existingImageUrl)
+                        return@addOnSuccessListener
+                    }
+                    // 본문에 이미지가 없으면 아래 Static Map 경로로 진행
+                }
 
-        // 수정 모드: 새 갤러리 이미지를 안 골랐으면, 본문의 기존 이미지 URL을 썸네일로 사용
-        if (isEditMode) {
-            val existingImageUrl = editors.firstOrNull {
-                it.type == ContentBlock.TYPE_IMAGE && it.imageUrl.isNotEmpty()
-            }?.imageUrl
-            if (existingImageUrl != null) {
+                // 썸네일이 없으면 모든 DAY 핀을 합친 Static Map 으로 대체.
+                // 좌표가 아직 안 채워진 map 블록이 있으면 먼저 geocode 로 보강한다.
+                val mapEditors = editors.filter { it.type == ContentBlock.TYPE_MAP }
+
+                if (mapEditors.isEmpty()) {
+                    // 일정(map 블록)도 없고 썸네일도 없음 → 만들 수 없음
+                    toast("대표 이미지를 선택하거나 일정을 추가하세요")
+                    return@addOnSuccessListener
+                }
+
+                // 업로드 시작(버튼 회색 잠금). geocode 동안에도 막힌 상태 유지.
                 setUploading(true)
-                uploadImagesThenSave(post, editors, pendingImages, existingImageUrl)
-                return
+
+                // 좌표 미확보 map 블록을 채운 뒤 업로드 진행
+                ensureMapCoordinates(mapEditors) {
+                    val staticMapUrl = buildStaticMapUrl(editors)
+                    if (staticMapUrl == null) {
+                        // geocode 후에도 좌표가 하나도 안 잡힌 경우
+                        setUploading(false)
+                        toast("지도를 만들 수 없습니다. 대표 이미지를 선택해주세요")
+                        return@ensureMapCoordinates
+                    }
+                    uploadImagesThenSave(post, editors, pendingImages, staticMapUrl)
+                }
             }
-            // 본문에 이미지가 없으면 아래 Static Map 경로로 진행
-        }
-
-        // 썸네일이 없으면 모든 DAY 핀을 합친 Static Map 으로 대체.
-        // 좌표가 아직 안 채워진 map 블록이 있으면 먼저 geocode 로 보강한다.
-        val mapEditors = editors.filter { it.type == ContentBlock.TYPE_MAP }
-
-        if (mapEditors.isEmpty()) {
-            // 일정(map 블록)도 없고 썸네일도 없음 → 만들 수 없음
-            toast("대표 이미지를 선택하거나 일정을 추가하세요")
-            return
-        }
-
-        // 업로드 시작(버튼 회색 잠금). geocode 동안에도 막힌 상태 유지.
-        setUploading(true)
-
-        // 좌표 미확보 map 블록을 채운 뒤 업로드 진행
-        ensureMapCoordinates(mapEditors) {
-            val staticMapUrl = buildStaticMapUrl(editors)
-            if (staticMapUrl == null) {
-                // geocode 후에도 좌표가 하나도 안 잡힌 경우
-                setUploading(false)
-                toast("지도를 만들 수 없습니다. 대표 이미지를 선택해주세요")
-                return@ensureMapCoordinates
+            .addOnFailureListener {
+                toast("닉네임 정보를 불러오지 못했습니다")
             }
-            uploadImagesThenSave(post, editors, pendingImages, staticMapUrl)
-        }
     }
+
 
     /**
      * map 블록들 중 좌표(markers)가 비어있는 것을 geocode 로 채운 뒤 onReady 호출.
@@ -802,23 +864,49 @@ class CreatePostFragment : Fragment() {
         val successMsg = if (isEditMode) "수정 완료" else "업로드 성공"
         val failMsg = if (isEditMode) "수정 실패" else "업로드 실패"
 
+        // 검색 인덱스 구성: 본문 텍스트, 여행설정(날짜/국가/인원), 해시태그 수집
+        val contentText = editors
+            .filter { it.type == ContentBlock.TYPE_TEXT }
+            .joinToString(" ") { it.text }
+            .trim()
+        val (startDate, endDate) = parseDateRange(travelSelectedDate) ?: ("" to "")
+        val hashtags = collectHashtags().toMutableList()
+        // N박M일 태그를 검색 인덱스에도 포함
+        durationTag(travelSelectedDate)?.let { if (!hashtags.contains(it)) hashtags.add(it) }
+
+        val buildIndex: (String) -> SearchIndex = { imageUrl ->
+            SearchIndex(
+                postId = post.postId,
+                title = post.title,
+                content = contentText,
+                userNickname = post.userNickname,
+                mainTheme = hashtags.firstOrNull() ?: "",
+                hashtags = hashtags,
+                country = travelSelectedCountry ?: "",
+                city = "",
+                travelerCount = peopleToCount(travelSelectedPeople),
+                startDate = startDate,
+                endDate = endDate,
+                postImageUrl = imageUrl,
+                createdAt = System.currentTimeMillis()
+            )
+        }
+
         if (thumbnailUri != null) {
-            // 새 갤러리 이미지를 썸네일로 업로드
             if (isEditMode) {
                 postRepository.updatePost(
                     post, thumbnailUri!!, blocks,
-                    { onSaveSuccess(successMsg) },
+                    { postRepository.saveSearchIndex(buildIndex(post.thumbnailImageUrl)); onSaveSuccess(successMsg) },
                     { onSaveFailure(failMsg) }
                 )
             } else {
                 postRepository.uploadPost(
                     post, thumbnailUri!!, blocks,
-                    { onSaveSuccess(successMsg) },
+                    { postRepository.saveSearchIndex(buildIndex(post.thumbnailImageUrl)); onSaveSuccess(successMsg) },
                     { onSaveFailure(failMsg) }
                 )
             }
         } else {
-            // 썸네일 Uri 없음: staticMapUrl(또는 수정 모드의 기존 이미지 URL)을 썸네일로 사용
             val postWithThumb = post.copy(
                 thumbnailImageUrl = staticMapUrl ?: "",
                 postImageType = if (staticMapUrl != null && staticMapUrl.contains("staticmap")) "map" else "image"
@@ -826,13 +914,13 @@ class CreatePostFragment : Fragment() {
             if (isEditMode) {
                 postRepository.updatePostWithoutThumbnail(
                     postWithThumb, blocks,
-                    { onSaveSuccess(successMsg) },
+                    { postRepository.saveSearchIndex(buildIndex(postWithThumb.thumbnailImageUrl)); onSaveSuccess(successMsg) },
                     { onSaveFailure(failMsg) }
                 )
             } else {
                 postRepository.uploadPostWithoutThumbnail(
                     postWithThumb, blocks,
-                    { onSaveSuccess(successMsg) },
+                    { postRepository.saveSearchIndex(buildIndex(postWithThumb.thumbnailImageUrl)); onSaveSuccess(successMsg) },
                     { onSaveFailure(failMsg) }
                 )
             }
@@ -871,22 +959,78 @@ class CreatePostFragment : Fragment() {
         layoutTravelSettingTagsContainer?.addView(tvTag)
     }
 
-    private fun calculateTotalBudget() {
-        val total = parseBudgetNumber(etBudgetFood.text.toString()) +
-                parseBudgetNumber(etBudgetTransport.text.toString()) +
-                parseBudgetNumber(etBudgetAccom.text.toString()) +
-                parseBudgetNumber(etBudgetShopping.text.toString()) +
-                parseBudgetNumber(etBudgetSightseeing.text.toString()) +
-                parseBudgetNumber(etBudgetEtc.text.toString())
-        tvTotalBudget.text = "총 ${total}만원"
+    // =====================================================
+    // 여행 설정 → 검색 인덱스 변환 헬퍼
+    // =====================================================
+
+    /** "2026/05/01 ~ 2026/05/03" → "2박 3일" / "2026/05/01" → "당일치기" / 못 읽으면 null */
+    private fun durationTag(selectedDate: String?): String? {
+        val (start, end) = parseDateRange(selectedDate) ?: return null
+        val nights = dayDiff(start, end)
+        return when {
+            nights <= 0 -> "당일치기"
+            else -> "${nights}박 ${nights + 1}일"
+        }
     }
 
-    private fun parseBudgetNumber(text: String?): Int =
-        try {
-            if (text.isNullOrBlank()) 0 else text.trim().toInt()
-        } catch (e: NumberFormatException) {
+    /** "2026/05/01 ~ 2026/05/03" → Pair("2026-05-01","2026-05-03"). 단일 날짜면 시작=종료. */
+    private fun parseDateRange(selectedDate: String?): Pair<String, String>? {
+        if (selectedDate.isNullOrBlank() || selectedDate == "날짜를 선택하세요") return null
+        val parts = selectedDate.split("~")
+        val startRaw = parts.getOrNull(0)?.trim() ?: return null
+        val endRaw = parts.getOrNull(1)?.trim() ?: startRaw
+        val start = startRaw.replace("/", "-")
+        val end = endRaw.replace("/", "-")
+        if (start.isEmpty()) return null
+        return start to end
+    }
+
+    /** yyyy-MM-dd 두 날짜의 일수 차이 (end - start). 파싱 실패 시 0 */
+    private fun dayDiff(start: String, end: String): Long {
+        return try {
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+            val s = fmt.parse(start)?.time ?: return 0
+            val e = fmt.parse(end)?.time ?: return 0
+            (e - s) / (24L * 60 * 60 * 1000)
+        } catch (ex: Exception) {
             0
         }
+    }
+
+    /** "혼자"→1, "2명"→2 처럼 숫자가 명시된 인원만 변환. 그 외("3~4명","가족" 등)는 0(미지정) */
+    private fun peopleToCount(people: String?): Long {
+        if (people.isNullOrBlank()) return 0
+        return when (people.trim()) {
+            "혼자" -> 1
+            "2명" -> 2
+            else -> 0  // "3~4명", "가족" 등은 숫자 미지정
+        }
+    }
+
+    /** selectedHashtags 를 해시태그 칩 영역(layoutTagsContainer)에 다시 그린다 */
+    private fun renderHashtagChips() {
+        val container = layoutTagsContainer ?: return
+        container.removeAllViews()
+        for (tag in selectedHashtags) {
+            val tvTag = TextView(context).apply {
+                text = "#$tag"
+                setTextColor(0xFF000000.toInt())
+                setBackgroundColor(0xFFEEEEEE.toInt())
+                setPadding(32, 12, 32, 12)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 0, 16, 0) }
+            }
+            container.addView(tvTag)
+        }
+    }
+
+    /** 화면의 해시태그 칩(layoutTagsContainer)에서 태그 문자열들을 수집 */
+    private fun collectHashtags(): List<String> {
+        // 선택된 해시태그(자동계산 + 사용자 선택)를 그대로 반환
+        return selectedHashtags.toList()
+    }
 
     private fun addTextBlock() {
         val container = layoutDynamicContent ?: return
@@ -895,15 +1039,16 @@ class CreatePostFragment : Fragment() {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 24, 0, 24) }
+            ).apply { setMargins(0, 16, 0, 8) }
             hint = "내용을 입력하세요"
             setBackgroundColor(Color.TRANSPARENT)
-            minLines = 3
+            minLines = 2
             tag = editor
             // 이 블록에 포커스가 가면 삽입 기준 위치로 기억
             setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
         }
         container.addView(editText)
+        enableLongPressDelete(editText)
     }
 
     private fun dp(value: Int): Int = Math.round(value * resources.displayMetrics.density)
@@ -928,8 +1073,29 @@ class CreatePostFragment : Fragment() {
         val container = layoutDynamicContent ?: return
         val index = insertIndex()
         container.addView(viewToAdd, index)
+        enableLongPressDelete(viewToAdd) // 길게 눌러 삭제
         // 다음 삽입이 방금 넣은 블록 뒤로 이어지도록 기준 갱신
         lastFocusedBlock = viewToAdd
+    }
+
+    /**
+     * 블록을 길게 누르면 삭제 확인 팝업을 띄우고, 확인 시 컨테이너에서 제거한다.
+     * 모든 블록(텍스트/이미지/place/map) 생성 시 호출.
+     */
+    private fun enableLongPressDelete(blockView: View) {
+        blockView.setOnLongClickListener {
+            androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("블록 삭제")
+                .setMessage("이 블록을 삭제하시겠습니까?")
+                .setPositiveButton("삭제") { _, _ ->
+                    layoutDynamicContent?.removeView(blockView)
+                    // 삭제된 블록이 삽입 기준이었다면 기준 초기화
+                    if (lastFocusedBlock == blockView) lastFocusedBlock = null
+                }
+                .setNegativeButton("취소", null)
+                .show()
+            true
+        }
     }
 
     // =====================================================
@@ -947,6 +1113,45 @@ class CreatePostFragment : Fragment() {
             spinnerVisibility?.setSelection(
                 if (post.visibility == Post.VISIBILITY_PRIVATE) 1 else 0
             )
+            // 기존 해시태그 복원 (칩 영역에 표시 + 선택 화면에서도 선택 상태로 보이게)
+            selectedHashtags.clear()
+            selectedHashtags.addAll(post.hashtags)
+            renderHashtagChips()
+        }
+
+        // 1.5) 추가: 검색 인덱스(searchIndexPosts)에서 여행 설정(날짜, 장소, 인원)을 가져와서 복구
+        db.collection("searchIndexPosts").document(postId).get().addOnSuccessListener { indexDoc ->
+            if (indexDoc.exists()) {
+                val startDate = indexDoc.getString("startDate") ?: ""
+                val endDate = indexDoc.getString("endDate") ?: ""
+                val country = indexDoc.getString("country") ?: ""
+                val travelerCount = indexDoc.getLong("travelerCount") ?: 0L
+
+                // ① 날짜 복원
+                if (startDate.isNotEmpty() && endDate.isNotEmpty() && startDate != endDate) {
+                    travelSelectedDate = "$startDate ~ $endDate"
+                } else if (startDate.isNotEmpty()) {
+                    travelSelectedDate = startDate
+                }
+
+                // ② 장소/국가 복원
+                travelSelectedCountry = country
+
+                // ③ 인원 복원 (숫자를 다시 글자로 번역)
+                travelSelectedPeople = when (travelerCount) {
+                    1L -> "혼자"
+                    2L -> "2명"
+                    else -> "" // (3~4명과 가족은 파이어베이스에 0으로 저장되도록 짜여있어서 구분이 어려워 빈칸 처리됩니다)
+                }
+
+                // ④ 화면 상단의 회색 칩(Tag) 영역에 예쁘게 다시 그려주기
+                activity?.runOnUiThread {
+                    layoutTravelSettingTagsContainer?.removeAllViews()
+                    addTravelSettingTag(travelSelectedDate)
+                    addTravelSettingTag(travelSelectedCountry)
+                    addTravelSettingTag(travelSelectedPeople)
+                }
+            }
         }
 
         // 2) 본문 블록 복원 (sortOrder 순)
@@ -975,7 +1180,32 @@ class CreatePostFragment : Fragment() {
             ContentBlock.TYPE_IMAGE -> restoreImageBlock(block.imageUrl, block.textContent)
             ContentBlock.TYPE_PLACE -> restorePlaceBlock(block.placeName, block.placeAddress)
             ContentBlock.TYPE_MAP -> restoreMapBlock(block)
+            ContentBlock.TYPE_BUDGET -> restoreBudgetBlock(block)
         }
+    }
+
+    /** 수정 모드: 저장된 예산 블록을 작성 화면에 복원 */
+    private fun restoreBudgetBlock(block: ContentBlock) {
+        val container = layoutDynamicContent ?: return
+        val editor = EditorBlock(
+            id = block.blockId.ifEmpty { UUID.randomUUID().toString() },
+            type = ContentBlock.TYPE_BUDGET,
+            budgetFood = block.budgetFood,
+            budgetTransport = block.budgetTransport,
+            budgetAccom = block.budgetAccom,
+            budgetShopping = block.budgetShopping,
+            budgetSightseeing = block.budgetSightseeing,
+            budgetEtc = block.budgetEtc
+        )
+        val budgetView = layoutInflater.inflate(R.layout.item_block_budget, container, false)
+        bindBudgetView(
+            budgetView, block.budgetFood, block.budgetTransport, block.budgetAccom,
+            block.budgetShopping, block.budgetSightseeing, block.budgetEtc
+        )
+        budgetView.tag = editor
+        container.addView(budgetView)
+        enableLongPressDelete(budgetView)
+        lastFocusedBlock = budgetView
     }
 
     private fun restoreTextBlock(text: String) {
@@ -994,6 +1224,7 @@ class CreatePostFragment : Fragment() {
             setOnFocusChangeListener { v, hasFocus -> if (hasFocus) lastFocusedBlock = v }
         }
         container.addView(et)
+        enableLongPressDelete(et)
         lastFocusedBlock = et
     }
 
@@ -1015,6 +1246,7 @@ class CreatePostFragment : Fragment() {
         }
         Glide.with(this).load(imageUrl).into(iv)
         container.addView(iv)
+        enableLongPressDelete(iv)
         lastFocusedBlock = iv
 
         // 수정 모드의 썸네일: 첫 이미지를 기준으로 삼되, 기존 URL 기반이라
@@ -1031,6 +1263,7 @@ class CreatePostFragment : Fragment() {
         )
         val placeView = buildPlaceHeaderView(placeName, placeAddress, editor)
         container.addView(placeView)
+        enableLongPressDelete(placeView)
         lastFocusedBlock = placeView
     }
 
@@ -1089,6 +1322,7 @@ class CreatePostFragment : Fragment() {
 
         mapBlockView.tag = editor
         container.addView(mapBlockView)
+        enableLongPressDelete(mapBlockView)
         lastFocusedBlock = mapBlockView
     }
 

@@ -11,6 +11,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.PopupMenu;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -47,10 +48,10 @@ public class FeedFragment extends Fragment {
     private HorizontalScrollView resultTagScroller;
     private ChipGroup resultTagContainer;
     private Button btnSort;
+    private TextView tvEmptyFeed;
 
     private final Set<String> selectedTags = new LinkedHashSet<>();
     private final List<String> travelSettingTags = new ArrayList<>();
-
     private final String[] knownTags = {
             "#아이와 함께", "#부모님과 함께", "#친구와 함께",
             "#가족들과 함께", "#신혼여행 맞춤", "#커플 여행",
@@ -86,6 +87,7 @@ public class FeedFragment extends Fragment {
         resultTagScroller = view.findViewById(R.id.resultTagScroller);
         resultTagContainer = view.findViewById(R.id.resultTagContainer);
         btnSort = view.findViewById(R.id.btnSort);
+        tvEmptyFeed = view.findViewById(R.id.tvEmptyFeed);
 
         btnSort.setOnClickListener(v -> {
             PopupMenu popup = new PopupMenu(getContext(), btnSort);
@@ -229,6 +231,7 @@ public class FeedFragment extends Fragment {
         if (currentUser == null || currentUser.getEmail() == null) {
             postList.clear();
             adapter.updatePosts(postList);
+            checkEmptyState(); // 추가
             return;
         }
         String myEmail = currentUser.getEmail();
@@ -265,6 +268,7 @@ public class FeedFragment extends Fragment {
         if (emails.isEmpty()) {
             postList.clear();
             adapter.updatePosts(postList);
+            checkEmptyState(); // 추가
             return;
         }
 
@@ -299,6 +303,7 @@ public class FeedFragment extends Fragment {
 
                     adapter.updatePosts(postList);
                     adapter.sortPostsByLatest(); // 최신순 정렬
+                    checkEmptyState(); // 추가
                 })
                 .addOnFailureListener(Throwable::printStackTrace);
     }
@@ -313,22 +318,44 @@ public class FeedFragment extends Fragment {
         String filterStartDate = null;
         String filterEndDate = null;
 
+        // 핵심 수정: "가족", "혼자" 등의 글자를 파이어베이스의 숫자 필드와 맞추기 위한 번역 로직 추가
         for (String tag : travelSettingTags) {
             if (tag.contains("명")) {
                 try { travelerCount = Long.parseLong(tag.replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
-            } else if (tag.contains("~")) {
-                String[] parts = tag.split("~");
-                filterStartDate = parts[0].trim().replace("/", "-");
-                filterEndDate = parts[1].trim().replace("/", "-");
+            } else if (tag.equals("혼자")) {
+                travelerCount = 1L; // "혼자"는 1명으로 검색
+            } else if (tag.equals("가족") || tag.contains("가족")) {
+                travelerCount = 0L; // CreatePostFragment에서 "가족"을 0으로 저장하므로 0으로 검색
+
+                // 업데이트: 202X년 숫자가 있고 슬래시(/)나 하이픈(-)이 있으면 '무조건' 날짜로 인식하게 만듭니다
+            } else if (tag.matches(".*\\d{4}.*") && (tag.contains("/") || tag.contains("-"))) {
+                if (tag.contains("~")) {
+                    // 기간(~) 검색일 때 (예: 2026/06/01 ~ 2026/06/02)
+                    String[] parts = tag.split("~");
+                    if (parts.length >= 2) {
+                        filterStartDate = parts[0].trim().replace("/", "-");
+                        filterEndDate = parts[1].trim().replace("/", "-");
+                    }
+                } else {
+                    // 단일 날짜(하루) 검색일 때 (예: 2026/06/01)
+                    filterStartDate = tag.trim().replace("/", "-");
+                    filterEndDate = filterStartDate;
+                }
             } else {
-                location = tag;
+                location = tag; // 나머지는 장소로 취급
             }
+        }
+
+        // 핵심 수정: 파이어베이스 DB에는 '#' 기호 없이 저장되어 있으므로 '#'을 제거하고 검색해야 합니다
+        List<String> cleanTags = new ArrayList<>();
+        for (String tag : selectedTags) {
+            cleanTags.add(tag.replace("#", "")); // "#아이와 함께" -> "아이와 함께" 로 변환
         }
 
         SearchRepository repository = new SearchRepository();
         repository.search(
                 keyword, travelerCount, location, null, null, filterStartDate, filterEndDate,
-                new ArrayList<>(selectedTags),
+                cleanTags, // 여기에 기존의 new ArrayList<>(selectedTags) 대신 cleanTags를 넣습니다
                 searchIndices -> {
                     List<String> postIds = new ArrayList<>();
                     for (SearchIndex index : searchIndices) {
@@ -340,27 +367,25 @@ public class FeedFragment extends Fragment {
                     if (postIds.isEmpty()) {
                         postList.clear();
                         adapter.updatePosts(postList);
+                        checkEmptyState();
                         return kotlin.Unit.INSTANCE;
                     }
 
                     List<String> safePostIds = postIds.size() > 10 ? postIds.subList(0, 10) : postIds;
 
                     FirebaseFirestore.getInstance().collection("posts")
-                            .whereIn(com.google.firebase.firestore.FieldPath.documentId(), safePostIds)
+                            .whereIn(FieldPath.documentId(), safePostIds)
                             .get()
                             .addOnSuccessListener(querySnapshot -> {
                                 postList.clear();
 
-                                // 여기서도 하나씩 꺼내서 ID를 주입합니다
                                 for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                                     Post post = doc.toObject(Post.class);
                                     if (post != null) {
-                                        // 비공개 글은 검색 결과에서 제외 (전체공개만)
                                         if (!"public".equals(post.getVisibility())) {
                                             continue;
                                         }
                                         try {
-                                            // Post.kt 수정 없이 강제로 postId를 주입 (리플렉션)
                                             java.lang.reflect.Field field = post.getClass().getDeclaredField("postId");
                                             field.setAccessible(true);
                                             field.set(post, doc.getId());
@@ -373,9 +398,30 @@ public class FeedFragment extends Fragment {
 
                                 adapter.updatePosts(postList);
                                 adapter.sortPostsByLatest();
+                                checkEmptyState();
                             });
                     return kotlin.Unit.INSTANCE;
                 }
         );
+    }
+    // 3. 빈 화면 상태를 업데이트하는 헬퍼 메서드 추가
+    private void checkEmptyState() {
+        if (postList.isEmpty()) {
+            String keyword = searchEditText.getText().toString().trim();
+            boolean isSearchMode = !keyword.isEmpty() || !selectedTags.isEmpty() || !travelSettingTags.isEmpty();
+
+            // 검색 모드일 때와 홈 피드일 때의 문구 분리
+            if (isSearchMode) {
+                tvEmptyFeed.setText("검색 결과가 없습니다.");
+            } else {
+                tvEmptyFeed.setText("팔로우를 통해 게시물을 업데이트 받아보세요!");
+            }
+
+            tvEmptyFeed.setVisibility(View.VISIBLE);
+            recyclerView.setVisibility(View.GONE);
+        } else {
+            tvEmptyFeed.setVisibility(View.GONE);
+            recyclerView.setVisibility(View.VISIBLE);
+        }
     }
 }

@@ -125,6 +125,21 @@
         app:layout_constraintTop_toBottomOf="@id/layoutSortAndTags"
         tools:listitem="@layout/item_feed" />
 
+    <TextView
+        android:id="@+id/tvEmptyFeed"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:text="팔로우를 통해 게시물을 업데이트 받아보세요!"
+        android:textColor="#888888"
+        android:textSize="16sp"
+        android:gravity="center"
+        android:visibility="gone"
+        android:layout_marginTop="12dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/layoutSortAndTags" />
+
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabWritePost"
         android:layout_width="wrap_content"
