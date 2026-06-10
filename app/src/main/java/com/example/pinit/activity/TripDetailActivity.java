@@ -11,8 +11,6 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.view.Menu;
-import android.view.MenuItem;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -21,9 +19,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
 import com.example.pinit.adapter.ScheduleDetailAdapter;
-import com.example.pinit.database.DatabaseHelper;
 import com.example.pinit.model.Schedule;
-import com.example.pinit.model.Trip;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -33,45 +29,49 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
-import com.example.pinit.database.FirestoreRepository;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public class TripDetailActivity extends AppCompatActivity implements OnMapReadyCallback {
 
     private static final int REQUEST_ADD_SCHEDULE = 100;
     private static final int REQUEST_EDIT_SCHEDULE = 101;
 
-    private DatabaseHelper dbHelper;
-    private int tripId;
-    private Trip trip;
+    private FirebaseFirestore db;
+    private String firestoreDocId;
     private GoogleMap googleMap;
-    private String selectedDate;
+    private String selectedDate = "";
     private List<String> dateList = new ArrayList<>();
     private LinearLayout dateTabs;
     private RecyclerView rvSchedule;
     private View layoutEmpty;
     private ScheduleDetailAdapter scheduleAdapter;
+
+    private Map<Integer, String> itemDocIdMap = new HashMap<>();
     private List<Schedule> currentSchedules = new ArrayList<>();
 
     private static final String API_KEY = com.example.pinit.database.PlacesApiHelper.API_KEY;
 
-    // ========== 콜백 인터페이스 ==========
     interface AddressCallback { void onResult(String address); }
 
     @Override
@@ -79,93 +79,47 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_trip_detail);
 
+        db = FirebaseFirestore.getInstance();
+        firestoreDocId = getIntent().getStringExtra("firestore_doc_id");
+
+        if (firestoreDocId == null) {
+            int tripId = getIntent().getIntExtra("trip_id", -1);
+            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            if (user != null && tripId != -1) {
+                firestoreDocId = user.getUid() + "_" + tripId;
+            }
+        }
+
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-
-        dbHelper = new DatabaseHelper(this);
-        tripId = getIntent().getIntExtra("trip_id", -1);
 
         dateTabs = findViewById(R.id.dateTabs);
         rvSchedule = findViewById(R.id.rvSchedule);
         layoutEmpty = findViewById(R.id.layoutEmpty);
 
         rvSchedule.setLayoutManager(new LinearLayoutManager(this));
-        scheduleAdapter = new ScheduleDetailAdapter(
-                this,
-                new ArrayList<>(),
-
-                // 지도 열기
+        scheduleAdapter = new ScheduleDetailAdapter(this, new ArrayList<>(),
                 schedule -> {
-
-                    if (schedule.getPlaceName() != null &&
-                            !schedule.getPlaceName().isEmpty()) {
-
-                        Uri webUri = Uri.parse(
-                                "https://maps.google.com/?q="
-                                        + Uri.encode(schedule.getPlaceName()));
-
-                        startActivity(
-                                new Intent(Intent.ACTION_VIEW, webUri));
+                    if (schedule.getPlaceName() != null && !schedule.getPlaceName().isEmpty()) {
+                        Uri webUri = Uri.parse("https://maps.google.com/?q=" + Uri.encode(schedule.getPlaceName()));
+                        startActivity(new Intent(Intent.ACTION_VIEW, webUri));
                     }
                 },
-
-                // 삭제
                 id -> {
-
-                    Schedule target = null;
-
-                    for (Schedule s : currentSchedules) {
-
-                        if (s.getId() == id) {
-                            target = s;
-                            break;
-                        }
+                    String itemDocId = itemDocIdMap.get(id);
+                    if (itemDocId != null && firestoreDocId != null && !selectedDate.isEmpty()) {
+                        db.collection("schedules").document(firestoreDocId)
+                                .collection("days").document(selectedDate)
+                                .collection("items").document(itemDocId)
+                                .delete().addOnSuccessListener(aVoid -> {
+                                    buildDateTabs();
+                                    loadSchedulesForDate(selectedDate);
+                                });
                     }
-
-                    dbHelper.deleteSchedule(id);
-
-                    // =========================
-                    // Firestore 삭제
-                    // =========================
-
-                    if (target != null) {
-
-                        FirebaseUser user =
-                                FirebaseAuth.getInstance()
-                                        .getCurrentUser();
-
-                        if (user != null) {
-
-                            FirestoreRepository repository =
-                                    new FirestoreRepository();
-
-                            String scheduleId =
-                                    user.getUid() + "_" + tripId;
-
-                            String dayId =
-                                    target.getDate();
-
-                            String itemId =
-                                    "item" + id;
-
-                            repository.deleteItem(
-                                    scheduleId,
-                                    dayId,
-                                    itemId
-                            );
-                        }
-                    }
-
-                    buildDateTabs();
-
-                    loadSchedulesForDate(selectedDate);
                 },
-
-                // 수정
                 schedule -> {
                     Intent intent = new Intent(this, AddScheduleActivity.class);
-                    intent.putExtra("schedule_id", schedule.getId());
                     intent.putExtra("schedule_title", schedule.getTitle());
                     intent.putExtra("schedule_date", schedule.getDate());
                     intent.putExtra("schedule_time", schedule.getTime());
@@ -176,37 +130,49 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
                     intent.putExtra("schedule_color", schedule.getColor());
                     intent.putExtra("schedule_category", schedule.getCategory());
                     intent.putExtra("schedule_google_place_id", schedule.getGooglePlaceId());
-                    intent.putExtra("trip_id", tripId);
                     startActivityForResult(intent, REQUEST_EDIT_SCHEDULE);
                 }
         );
         rvSchedule.setAdapter(scheduleAdapter);
 
         findViewById(R.id.btnAddSchedule).setOnClickListener(v -> openAddSchedule());
-
         findViewById(R.id.btnAddScheduleEmpty).setOnClickListener(v -> openAddSchedule());
 
-
-        SupportMapFragment mapFragment = (SupportMapFragment)
-                getSupportFragmentManager().findFragmentById(R.id.mapView);
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.mapView);
         if (mapFragment != null) mapFragment.getMapAsync(this);
 
-        loadTrip();
+        loadTripFromFirebase();
     }
 
-    private void loadTrip() {
-        trip = dbHelper.getTripById(tripId);
-        if (trip == null) { finish(); return; }
+    private void loadTripFromFirebase() {
+        if (firestoreDocId == null || firestoreDocId.isEmpty()) { finish(); return; }
 
-        if (getSupportActionBar() != null) getSupportActionBar().setTitle(trip.getTitle());
-        ((TextView) findViewById(R.id.tvDestination)).setText("📍 " + trip.getDestination());
-        ((TextView) findViewById(R.id.tvDate)).setText("📅 " + trip.getStartDate() + " - " + trip.getEndDate());
+        db.collection("schedules").document(firestoreDocId).get().addOnSuccessListener(doc -> {
+            if (!doc.exists()) { finish(); return; }
 
-        dateList = generateDateList(trip.getStartDate(), trip.getEndDate());
-        selectedDate = dateList.isEmpty() ? "" : dateList.get(0);
+            String title = doc.getString("title");
+            String country = doc.getString("country");
+            String startDate = doc.getString("startDate");
+            String endDate = doc.getString("endDate");
 
-        buildDateTabs();
-        loadSchedulesForDate(selectedDate);
+            if (title == null || title.isEmpty()) title = "이름 없는 일정";
+            if (country == null || country.isEmpty()) country = "미정";
+            if (startDate == null || startDate.isEmpty()) startDate = "2026-06-10";
+            if (endDate == null || endDate.isEmpty()) endDate = "2026-06-10";
+
+            startDate = startDate.replace(".", "-").replaceAll(" ", "");
+            endDate = endDate.replace(".", "-").replaceAll(" ", "");
+
+            if (getSupportActionBar() != null) getSupportActionBar().setTitle(title);
+            ((TextView) findViewById(R.id.tvDestination)).setText("📍 " + country);
+            ((TextView) findViewById(R.id.tvDate)).setText("📅 " + startDate + " - " + endDate);
+
+            dateList = generateDateList(startDate, endDate);
+            selectedDate = dateList.isEmpty() ? startDate : dateList.get(0);
+
+            buildDateTabs();
+            loadSchedulesForDate(selectedDate);
+        }).addOnFailureListener(e -> finish());
     }
 
     private List<String> generateDateList(String startStr, String endStr) {
@@ -222,7 +188,7 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
                 cal.add(Calendar.DAY_OF_MONTH, 1);
             }
         } catch (ParseException e) {
-            e.printStackTrace();
+            dates.add(startStr);
         }
         return dates;
     }
@@ -237,8 +203,7 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
             LinearLayout tab = new LinearLayout(this);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT);
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             params.setMarginEnd(8);
             tab.setLayoutParams(params);
             tab.setOrientation(LinearLayout.VERTICAL);
@@ -249,13 +214,7 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
             String displayDate = date;
             try { displayDate = displaySdf.format(inputSdf.parse(date)); } catch (ParseException ignored) {}
 
-            List<Schedule> allSchedules = dbHelper.getSchedulesByTrip(tripId);
-            int count = 0;
-            for (Schedule s : allSchedules) {
-                if (date.equals(s.getDate())) count++;
-            }
-
-            tvDateLabel.setText(displayDate + "\n" + count + "개 일정");
+            tvDateLabel.setText(displayDate + "\n일정 보기");
             tvDateLabel.setTextSize(12f);
             tvDateLabel.setGravity(android.view.Gravity.CENTER);
             tvDateLabel.setTextColor(Color.BLACK);
@@ -288,103 +247,91 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
     }
 
     private void loadSchedulesForDate(String date) {
-        if (date == null || date.isEmpty()) return;
-
-        List<Schedule> allSchedules = dbHelper.getSchedulesByTrip(tripId);
-        List<Schedule> filtered = new ArrayList<>();
-        for (Schedule s : allSchedules) {
-            if (date.equals(s.getDate())) filtered.add(s);
-        }
-        filtered.sort((a, b) -> {
-            String ta = a.getTime() == null ? "" : a.getTime();
-            String tb = b.getTime() == null ? "" : b.getTime();
-            String[] pa = ta.split(":");
-            String[] pb = tb.split(":");
-            try {
-                int ha = pa.length > 0 ? Integer.parseInt(pa[0]) : 0;
-                int ma = pa.length > 1 ? Integer.parseInt(pa[1]) : 0;
-                int hb = pb.length > 0 ? Integer.parseInt(pb[0]) : 0;
-                int mb = pb.length > 1 ? Integer.parseInt(pb[1]) : 0;
-                return ha != hb ? ha - hb : ma - mb;
-            } catch (NumberFormatException e) {
-                return ta.compareTo(tb);
-            }
-        });
-
-        currentSchedules = filtered;
-
-        if (filtered.isEmpty()) {
+        if (date == null || date.isEmpty() || firestoreDocId == null || firestoreDocId.isEmpty()) {
             layoutEmpty.setVisibility(View.VISIBLE);
             rvSchedule.setVisibility(View.GONE);
-        } else {
-            layoutEmpty.setVisibility(View.GONE);
-            rvSchedule.setVisibility(View.VISIBLE);
+            return;
         }
 
-        scheduleAdapter.updateList(filtered);
+        db.collection("schedules").document(firestoreDocId)
+                .collection("days").document(date)
+                .collection("items").get().addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<Schedule> filtered = new ArrayList<>();
+                    itemDocIdMap.clear();
 
-        if (googleMap != null) {
-            showPinsForSchedules(filtered);
-        }
+                    for (QueryDocumentSnapshot d : queryDocumentSnapshots) {
+                        Schedule s = d.toObject(Schedule.class);
+                        if (s != null) {
+                            // 💡 초강력 방어막: 파이어베이스 null 필드를 전량 빈 공백문자("")로 수동 교체하여 어댑터 NPE 완전 차단!
+                            if (s.getTitle() == null) s.setTitle("");
+                            if (s.getPlaceName() == null) s.setPlaceName("");
+                            if (s.getTime() == null) s.setTime("");
+                            if (s.getMemo() == null) s.setMemo("");
+                            if (s.getColor() == null) s.setColor("#FFDA44");
+                            if (s.getCategory() == null) s.setCategory("");
+                            if (s.getGooglePlaceId() == null) s.setGooglePlaceId("");
+                            if (s.getDate() == null) s.setDate(date);
+
+                            int localId = d.getId().hashCode();
+                            s.setId(localId);
+                            itemDocIdMap.put(localId, d.getId());
+                            filtered.add(s);
+                        }
+                    }
+
+                    // 💡 API 호환성 방어: 하위 버전 기기 크래시 차단을 위해 Collections.sort 문법 변경
+                    Collections.sort(filtered, (a, b) -> {
+                        String ta = a.getTime() == null ? "" : a.getTime();
+                        String tb = b.getTime() == null ? "" : b.getTime();
+                        return ta.compareTo(tb);
+                    });
+
+                    currentSchedules = filtered;
+
+                    if (filtered.isEmpty()) {
+                        layoutEmpty.setVisibility(View.VISIBLE);
+                        rvSchedule.setVisibility(View.GONE);
+                    } else {
+                        layoutEmpty.setVisibility(View.GONE);
+                        rvSchedule.setVisibility(View.VISIBLE);
+                    }
+
+                    scheduleAdapter.updateList(filtered);
+                    if (googleMap != null) showPinsForSchedules(filtered);
+                }).addOnFailureListener(e -> {
+                    layoutEmpty.setVisibility(View.VISIBLE);
+                    rvSchedule.setVisibility(View.GONE);
+                });
     }
 
-    // ========== 지도 핀 표시 ==========
     private void showPinsForSchedules(List<Schedule> schedules) {
-
         if (googleMap == null) return;
-
         googleMap.clear();
-
         if (schedules.isEmpty()) return;
 
         List<LatLng> positions = new ArrayList<>();
-
         for (int i = 0; i < schedules.size(); i++) {
-
             Schedule s = schedules.get(i);
+            if (s.getLatitude() == 0 && s.getLongitude() == 0) continue;
 
-            double lat = s.getLatitude();
-            double lng = s.getLongitude();
-
-            // 좌표 없는 일정은 스킵
-            if (lat == 0 && lng == 0) {
-                continue;
-            }
-
-            LatLng pos = new LatLng(lat, lng);
-
+            LatLng pos = new LatLng(s.getLatitude(), s.getLongitude());
             positions.add(pos);
 
-            googleMap.addMarker(
-                    new MarkerOptions()
-                            .position(pos)
-                            .title((i + 1) + ". " + s.getTitle())
-                            .snippet(s.getPlaceName())
-                            .icon(BitmapDescriptorFactory.defaultMarker(
-                                    BitmapDescriptorFactory.HUE_YELLOW))
-            );
+            googleMap.addMarker(new MarkerOptions()
+                    .position(pos)
+                    .title((i + 1) + ". " + (s.getTitle() != null ? s.getTitle() : ""))
+                    .snippet(s.getPlaceName() != null ? s.getPlaceName() : "")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
         }
 
         if (positions.size() >= 2) {
-
-            googleMap.addPolyline(
-                    new PolylineOptions()
-                            .addAll(positions)
-                            .width(8f)
-                            .color(Color.parseColor("#FF9800"))
-            );
+            googleMap.addPolyline(new PolylineOptions().addAll(positions).width(8f).color(Color.parseColor("#FF9800")));
         }
-
         fitCameraToPins(positions);
     }
 
     private void fitCameraToPins(List<LatLng> positions) {
-        if (googleMap == null) return;
-        if (positions.isEmpty()) {
-            googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(
-                    new LatLng(37.5665, 126.9780), 10f));
-            return;
-        }
+        if (googleMap == null || positions.isEmpty()) return;
         if (positions.size() == 1) {
             googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(positions.get(0), 15f));
         } else {
@@ -394,47 +341,29 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         }
     }
 
-    // ========== 지도 탭 → 역지오코딩 → 일정 추가 ==========
-
     @Override
     public void onMapReady(GoogleMap map) {
         googleMap = map;
         googleMap.getUiSettings().setZoomControlsEnabled(true);
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-                new LatLng(37.5665, 126.9780), 10f));
-
         googleMap.setOnMapClickListener(latLng -> reverseGeocode(latLng, address ->
                 runOnUiThread(() -> showMapTapDialog(latLng, address))));
-
-        googleMap.setOnMarkerClickListener(marker -> {
-            marker.showInfoWindow();
-            return true;
-        });
-
         loadSchedulesForDate(selectedDate);
     }
 
-    // ★ 수정: AddressCallback 사용으로 타입 오류 해결
     private void reverseGeocode(LatLng latLng, AddressCallback callback) {
         new Thread(() -> {
             try {
                 String url = "https://maps.googleapis.com/maps/api/geocode/json?latlng="
-                        + latLng.latitude + "," + latLng.longitude
-                        + "&language=ko&key=" + API_KEY;
+                        + latLng.latitude + "," + latLng.longitude + "&language=ko&key=" + API_KEY;
                 OkHttpClient client = new OkHttpClient();
                 Request request = new Request.Builder().url(url).build();
                 Response response = client.newCall(request).execute();
-                String body = response.body().string();
-                JSONObject json = new JSONObject(body);
+                JSONObject json = new JSONObject(response.body().string());
                 JSONArray results = json.optJSONArray("results");
                 if (results != null && results.length() > 0) {
                     callback.onResult(results.getJSONObject(0).optString("formatted_address", ""));
-                } else {
-                    callback.onResult("");
-                }
-            } catch (Exception e) {
-                callback.onResult("");
-            }
+                } else { callback.onResult(""); }
+            } catch (Exception e) { callback.onResult(""); }
         }).start();
     }
 
@@ -444,10 +373,7 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
         layout.setPadding(48, 24, 48, 0);
 
         TextView tvAddress = new TextView(this);
-        tvAddress.setText(address.isEmpty()
-                ? String.format("%.5f, %.5f", latLng.latitude, latLng.longitude)
-                : address);
-        tvAddress.setTextSize(12f);
+        tvAddress.setText(address.isEmpty() ? String.format("%.5f, %.5f", latLng.latitude, latLng.longitude) : address);
         tvAddress.setTextColor(Color.GRAY);
         tvAddress.setPadding(0, 0, 0, 16);
         layout.addView(tvAddress);
@@ -471,85 +397,39 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
                     }
                     addScheduleFromMap(title, etTime.getText().toString().trim(), address, latLng);
                 })
-                .setNegativeButton("취소", null)
-                .show();
+                .setNegativeButton("취소", null).show();
     }
 
     private void addScheduleFromMap(String title, String time, String address, LatLng latLng) {
+        if (firestoreDocId == null || selectedDate == null || selectedDate.isEmpty()) return;
+
         Schedule s = new Schedule();
-        s.setTripId(tripId);
         s.setTitle(title);
         s.setDate(selectedDate);
         s.setTime(time);
-        s.setPlaceName(address.isEmpty()
-                ? String.format("%.5f, %.5f", latLng.latitude, latLng.longitude)
-                : address);
-        s.setMemo("");
+        s.setPlaceName(address.isEmpty() ? String.format("%.5f, %.5f", latLng.latitude, latLng.longitude) : address);
         s.setColor("#FFDA44");
-
         s.setLatitude(latLng.latitude);
         s.setLongitude(latLng.longitude);
 
-        long insertedId =
-                dbHelper.insertSchedule(s);
+        DocumentReference dayRef = db.collection("schedules").document(firestoreDocId)
+                .collection("days").document(selectedDate);
 
-        s.setId((int) insertedId);
+        Map<String, Object> dayData = new HashMap<>();
+        dayData.put("dayNumber", 1);
+        dayData.put("dayTitle", selectedDate);
 
-// =========================
-// Firestore 업로드
-// =========================
-
-        FirebaseUser user =
-                FirebaseAuth.getInstance()
-                        .getCurrentUser();
-
-        if (user != null) {
-
-            FirestoreRepository repository =
-                    new FirestoreRepository();
-
-            String scheduleId =
-                    user.getUid() + "_"
-                            + tripId;
-
-            String dayId =
-                    s.getDate();
-
-            String itemId =
-                    "item" + insertedId;
-
-            repository.uploadDay(
-                    scheduleId,
-                    dayId,
-                    1,
-                    dayId
-            );
-
-            repository.uploadItem(
-                    scheduleId,
-                    dayId,
-                    itemId,
-                    s
-            );
-        }
-
-        if (googleMap != null) {
-            googleMap.addMarker(new MarkerOptions()
-                    .position(latLng)
-                    .title(title)
-                    .snippet(s.getPlaceName())
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
-            googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15f));
-        }
-
-        buildDateTabs();
-        loadSchedulesForDate(selectedDate);
-        Toast.makeText(this, "'" + title + "' 일정이 추가되었습니다!", Toast.LENGTH_SHORT).show();
+        dayRef.set(dayData).addOnSuccessListener(aVoid -> {
+            dayRef.collection("items").document().set(s).addOnSuccessListener(aVoid2 -> {
+                buildDateTabs();
+                loadSchedulesForDate(selectedDate);
+                Toast.makeText(this, "'" + title + "' 일정이 추가되었습니다!", Toast.LENGTH_SHORT).show();
+            });
+        });
     }
 
     private void openAddSchedule() {
         Intent intent = new Intent(this, AddScheduleActivity.class);
-        intent.putExtra("trip_id", tripId);
         intent.putExtra("default_date", selectedDate);
         startActivityForResult(intent, REQUEST_ADD_SCHEDULE);
     }
@@ -557,8 +437,7 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == RESULT_OK &&
-                (requestCode == REQUEST_ADD_SCHEDULE || requestCode == REQUEST_EDIT_SCHEDULE)) {
+        if (resultCode == RESULT_OK && (requestCode == REQUEST_ADD_SCHEDULE || requestCode == REQUEST_EDIT_SCHEDULE)) {
             buildDateTabs();
             loadSchedulesForDate(selectedDate);
         }
@@ -566,41 +445,4 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
 
     @Override
     public boolean onSupportNavigateUp() { finish(); return true; }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-
-        getMenuInflater().inflate(
-                R.menu.menu_trip_detail,
-                menu
-        );
-
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-
-        int id = item.getItemId();
-
-        if (id == R.id.action_edit_trip) {
-
-            Intent intent =
-                    new Intent(
-                            this,
-                            AddTripActivity.class
-                    );
-
-            intent.putExtra(
-                    "edit_trip_id",
-                    tripId
-            );
-
-            startActivity(intent);
-
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }
 }

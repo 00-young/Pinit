@@ -37,9 +37,13 @@ import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FieldValue;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -53,7 +57,6 @@ public class PostDetailFragment extends Fragment {
     private TextView tvPostDate;
     private TextView tvViewCount;
 
-    // 추가됨: 수정, 삭제 버튼 변수
     private TextView btnEditPost;
     private TextView btnDeletePost;
 
@@ -61,14 +64,14 @@ public class PostDetailFragment extends Fragment {
     private ImageView btnActionShare;
     private RecyclerView rvContentBlocks;
 
-    // 새로 추가된 뷰 (여행 설정 & 해시태그 영역)
     private HorizontalScrollView scrollTravelSettings;
     private LinearLayout layoutDetailTravelSettings;
     private HorizontalScrollView scrollHashtags;
     private LinearLayout layoutDetailHashtags;
 
-    private List<Schedule> day1Schedules = new ArrayList<>();
-    private List<Schedule> day2Schedules = new ArrayList<>();
+    private String srcStartDate = "";
+    private String srcEndDate = "";
+    private String srcCountry = "";
 
     public static PostDetailFragment newInstance(String postId) {
         PostDetailFragment fragment = new PostDetailFragment();
@@ -87,6 +90,7 @@ public class PostDetailFragment extends Fragment {
         }
     }
 
+    @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.activity_post_detail, container, false);
 
@@ -94,7 +98,11 @@ public class PostDetailFragment extends Fragment {
         btnActionShare = view.findViewById(R.id.btnActionShare);
         rvContentBlocks = view.findViewById(R.id.rvContentBlocks);
 
-        // 새 영역 바인딩
+        TextView btnSaveAllSchedules = view.findViewById(R.id.btnSaveAllSchedules);
+        if (btnSaveAllSchedules != null) {
+            btnSaveAllSchedules.setOnClickListener(v -> saveEntireScheduleToMyTravel());
+        }
+
         scrollTravelSettings = view.findViewById(R.id.scrollTravelSettings);
         layoutDetailTravelSettings = view.findViewById(R.id.layoutDetailTravelSettings);
         scrollHashtags = view.findViewById(R.id.scrollHashtags);
@@ -114,9 +122,8 @@ public class PostDetailFragment extends Fragment {
         tvAuthorName = view.findViewById(R.id.tvAuthorName);
         authorProfileImage = view.findViewById(R.id.authorProfileImage);
         tvPostDate = view.findViewById(R.id.tvPostDate);
-        tvViewCount = view.findViewById(R.id.tvViewCount); // 레이아웃에 없으면 null (방어 처리됨)
+        tvViewCount = view.findViewById(R.id.tvViewCount);
 
-        // 추가됨: 버튼 바인딩
         btnEditPost = view.findViewById(R.id.btnEditPost);
         btnDeletePost = view.findViewById(R.id.btnDeletePost);
 
@@ -140,7 +147,15 @@ public class PostDetailFragment extends Fragment {
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     List<ContentBlock> blocks = queryDocumentSnapshots.toObjects(ContentBlock.class);
                     rvContentBlocks.setLayoutManager(new LinearLayoutManager(getContext()));
-                    rvContentBlocks.setAdapter(new ContentBlockAdapter(blocks));
+
+                    // 💡 수정된 핵심 구역: expected 1 인자에 딱 맞춰 람다식 매칭 완벽 수선
+                    rvContentBlocks.setAdapter(new ContentBlockAdapter(blocks, dayNumber -> {
+                        ContentBlockAdapter adapter = (ContentBlockAdapter) rvContentBlocks.getAdapter();
+                        if (adapter != null) {
+                            List<Schedule> targetSchedules = adapter.getSchedulesForDay(dayNumber);
+                            saveSingleDayToMyTravel(dayNumber, targetSchedules);
+                        }
+                    }));
                 });
     }
 
@@ -187,7 +202,6 @@ public class PostDetailFragment extends Fragment {
             Post post = documentSnapshot.toObject(Post.class);
             if (post == null) return;
 
-            // 비공개 글은 작성자만 열람 가능
             String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null
                     ? FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
             boolean isPrivate = "private".equals(post.getVisibility());
@@ -203,12 +217,10 @@ public class PostDetailFragment extends Fragment {
     }
 
     private void recordView() {
-        // 상세화면 열 때마다 조회수 +1, 성공하면 최신 조회수를 화면에 반영
         db.collection("posts").document(postId)
                 .update("viewCount", FieldValue.increment(1))
                 .addOnSuccessListener(unused -> refreshViewCount());
 
-        // 조회 기록 (누가 언제 봤는지)
         if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
         String viewId = UUID.randomUUID().toString();
@@ -219,7 +231,6 @@ public class PostDetailFragment extends Fragment {
         db.collection("posts").document(postId).collection("views").document(viewId).set(viewData);
     }
 
-    /** 증가된 최신 viewCount 를 다시 읽어 화면에 표시 */
     private void refreshViewCount() {
         db.collection("posts").document(postId).get().addOnSuccessListener(doc -> {
             Post post = doc.toObject(Post.class);
@@ -228,7 +239,6 @@ public class PostDetailFragment extends Fragment {
         });
     }
 
-    /** 조회수를 화면에 표시 (조회수 TextView 가 없으면 무시) */
     private void bindViewCount(int count) {
         if (tvViewCount != null) {
             tvViewCount.setText("조회 " + count);
@@ -241,7 +251,6 @@ public class PostDetailFragment extends Fragment {
         loadAuthorProfileImage(post.getUserEmail());
         bindViewCount(post.getViewCount());
 
-        // 1️ 해시태그 화면 표시 로직
         if (post.getHashtags() != null && !post.getHashtags().isEmpty()) {
             scrollHashtags.setVisibility(View.VISIBLE);
             layoutDetailHashtags.removeAllViews();
@@ -250,13 +259,17 @@ public class PostDetailFragment extends Fragment {
             }
         }
 
-        //  2️ 여행 설정 화면 표시 로직 (searchIndexPosts 에서 가져오기)
         db.collection("searchIndexPosts").document(postId).get().addOnSuccessListener(indexDoc -> {
             if (indexDoc.exists()) {
                 List<String> travelTags = new ArrayList<>();
 
                 String startDate = indexDoc.getString("startDate");
                 String endDate = indexDoc.getString("endDate");
+
+                srcStartDate = (startDate != null && !startDate.isEmpty()) ? startDate : "2026-06-10";
+                srcEndDate = (endDate != null && !endDate.isEmpty()) ? endDate : "2026-06-10";
+                srcCountry = indexDoc.getString("country") != null ? indexDoc.getString("country") : "제주도";
+
                 if (startDate != null && !startDate.isEmpty()) {
                     if (endDate != null && !endDate.isEmpty() && !startDate.equals(endDate)) {
                         travelTags.add(startDate + " ~ " + endDate);
@@ -287,19 +300,15 @@ public class PostDetailFragment extends Fragment {
         View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
         if (authorRow != null) {
             authorRow.setOnClickListener(v -> {
-                // 현재 로그인한 내 UID 가져오기
                 String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
                         FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
 
-                // 내 UID와 게시물 작성자 UID 비교
                 if (post.getUserId() != null && post.getUserId().equals(currentUid)) {
-                    // 내 게시물이면 MyPageFragment로 이동
                     getParentFragmentManager().beginTransaction()
                             .replace(R.id.fragmentContainer, new MyPageFragment())
                             .addToBackStack(null)
                             .commit();
                 } else {
-                    // 남의 게시물이면 기존대로 OtherMyPageFragment로 이동
                     getParentFragmentManager().beginTransaction()
                             .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance(post.getUserNickname()))
                             .addToBackStack(null).commit();
@@ -313,7 +322,6 @@ public class PostDetailFragment extends Fragment {
             tvPostDate.setText(formattedDate);
         }
 
-        //  내 게시물일 경우 버튼 보이기 및 동작 연결
         String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
                 FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
 
@@ -333,7 +341,6 @@ public class PostDetailFragment extends Fragment {
         }
     }
 
-    //  태그를 예쁘게 만들어주는 헬퍼 메서드
     private TextView createTagView(String text, boolean isHashtag) {
         TextView tv = new TextView(getContext());
         tv.setText(isHashtag && !text.startsWith("#") ? "#" + text : text);
@@ -382,28 +389,6 @@ public class PostDetailFragment extends Fragment {
                 });
     }
 
-    private void saveSingleDayToMyTravel(int dayNumber) {
-        MyPlan singleDayPlan = new MyPlan();
-        singleDayPlan.setTitle("상하이 여행기 - DAY " + dayNumber + " (스크랩)");
-        singleDayPlan.setCountry("상하이");
-        List<DailySchedule> selectedDayList = new ArrayList<>();
-        DailySchedule targetDay = new DailySchedule();
-        if (dayNumber == 1) {
-            targetDay.setDayTitle("DAY 1");
-            targetDay.setDate("2026.05.23");
-            targetDay.setScheduleObjects(day1Schedules);
-            singleDayPlan.setDate("2026.05.23");
-        } else if (dayNumber == 2) {
-            targetDay.setDayTitle("DAY 2");
-            targetDay.setDate("2026.05.24");
-            targetDay.setScheduleObjects(day2Schedules);
-            singleDayPlan.setDate("2026.05.24");
-        }
-        selectedDayList.add(targetDay);
-        singleDayPlan.setSchedules(selectedDayList);
-        Toast.makeText(getContext(), "DAY " + dayNumber + " 일정이 내 여행에 담겼습니다!", Toast.LENGTH_SHORT).show();
-    }
-
     private void setupBottomActions(View view) {
         ImageView btnActionComment = view.findViewById(R.id.btnActionComment);
         btnActionComment.setOnClickListener(v -> {
@@ -412,7 +397,6 @@ public class PostDetailFragment extends Fragment {
         });
     }
 
-    //  추가됨: 게시물 삭제 로직
     private void deleteMyPost() {
         new android.app.AlertDialog.Builder(getContext())
                 .setTitle("게시물 삭제")
@@ -431,13 +415,99 @@ public class PostDetailFragment extends Fragment {
                 .show();
     }
 
-    // 추가됨: 게시물 수정 로직 (코틀린 파일의 Companion object 호출!)
     private void editMyPost() {
         Toast.makeText(getContext(), "게시물 수정 화면으로 이동합니다.", Toast.LENGTH_SHORT).show();
-
         getParentFragmentManager().beginTransaction()
                 .replace(R.id.fragmentContainer, CreatePostFragment.Companion.newInstanceForEdit(postId))
                 .addToBackStack(null)
                 .commit();
+    }
+
+    private void saveEntireScheduleToMyTravel() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            Toast.makeText(getContext(), "로그인이 필요합니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        String originalTitle = tvPostTitle.getText().toString();
+        String newScheduleTitle = originalTitle + " (전체 스크랩)";
+
+        DocumentReference newScheduleRef = db.collection("schedules").document();
+        Map<String, Object> scheduleData = new HashMap<>();
+        scheduleData.put("userId", uid);
+        scheduleData.put("title", newScheduleTitle);
+        scheduleData.put("startDate", srcStartDate);
+        scheduleData.put("endDate", srcEndDate);
+        scheduleData.put("country", srcCountry);
+        scheduleData.put("createdAt", FieldValue.serverTimestamp());
+
+        newScheduleRef.set(scheduleData).addOnSuccessListener(aVoid -> {
+            ContentBlockAdapter adapter = (ContentBlockAdapter) rvContentBlocks.getAdapter();
+            if (adapter != null) {
+                List<Schedule> d1 = adapter.getSchedulesForDay(1);
+                List<Schedule> d2 = adapter.getSchedulesForDay(2);
+
+                if (!d1.isEmpty()) saveDayItemsToFirebase(newScheduleRef, 1, d1);
+                if (!d2.isEmpty()) saveDayItemsToFirebase(newScheduleRef, 2, d2);
+            }
+            Toast.makeText(getContext(), "모든 일정이 내 여행에 담겼습니다! ✈️📌", Toast.LENGTH_SHORT).show();
+        }).addOnFailureListener(e -> Toast.makeText(getContext(), "저장 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+    }
+
+    private void saveSingleDayToMyTravel(int dayNumber, List<Schedule> targetSchedules) {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            Toast.makeText(getContext(), "로그인이 필요합니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        String originalTitle = tvPostTitle.getText().toString();
+        String newScheduleTitle = originalTitle + " - DAY " + dayNumber + " (스크랩)";
+
+        DocumentReference newScheduleRef = db.collection("schedules").document();
+        Map<String, Object> scheduleData = new HashMap<>();
+        scheduleData.put("userId", uid);
+        scheduleData.put("title", newScheduleTitle);
+        scheduleData.put("startDate", srcStartDate);
+        scheduleData.put("endDate", srcEndDate);
+        scheduleData.put("country", srcCountry);
+        scheduleData.put("createdAt", FieldValue.serverTimestamp());
+
+        newScheduleRef.set(scheduleData).addOnSuccessListener(aVoid -> {
+            saveDayItemsToFirebase(newScheduleRef, dayNumber, targetSchedules);
+            Toast.makeText(getContext(), "DAY " + dayNumber + " 일정이 담겼습니다! 📌", Toast.LENGTH_SHORT).show();
+        }).addOnFailureListener(e -> Toast.makeText(getContext(), "저장 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+    }
+
+    private String calculateDateForDay(String startDateStr, int dayNum) {
+        if (startDateStr == null || startDateStr.isEmpty()) return "2026-06-10";
+        try {
+            String cleanDate = startDateStr.replace(".", "-").replaceAll(" ", "");
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.KOREA);
+            Date date = sdf.parse(cleanDate);
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(date);
+            cal.add(Calendar.DAY_OF_MONTH, dayNum - 1);
+            return sdf.format(cal.getTime());
+        } catch (Exception e) {
+            return startDateStr;
+        }
+    }
+
+    private void saveDayItemsToFirebase(DocumentReference scheduleRef, int dayNum, List<Schedule> schedules) {
+        if (schedules == null || schedules.isEmpty()) return;
+
+        String targetDateId = calculateDateForDay(srcStartDate, dayNum);
+
+        DocumentReference dayRef = scheduleRef.collection("days").document(targetDateId);
+        Map<String, Object> dayData = new HashMap<>();
+        dayData.put("dayNumber", dayNum);
+        dayData.put("dayTitle", "DAY " + dayNum);
+
+        dayRef.set(dayData).addOnSuccessListener(aVoid -> {
+            for (Schedule s : schedules) {
+                s.setDate(targetDateId);
+                dayRef.collection("items").document().set(s);
+            }
+        });
     }
 }
