@@ -26,6 +26,7 @@ public class AddScheduleActivity extends AppCompatActivity {
     private int tripId;
     private int editScheduleId = -1;
     private String originalDate;
+    private ActivityResultLauncher<Intent> mapActivityResultLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

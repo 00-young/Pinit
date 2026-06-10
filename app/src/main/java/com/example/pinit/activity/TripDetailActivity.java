@@ -351,28 +351,133 @@ public class TripDetailActivity extends AppCompatActivity implements OnMapReadyC
                 continue;
             }
 
-            LatLng pos = new LatLng(lat, lng);
 
-            positions.add(pos);
 
-            googleMap.addMarker(
-                    new MarkerOptions()
-                            .position(pos)
-                            .title((i + 1) + ". " + s.getTitle())
-                            .snippet(s.getPlaceName())
-                            .icon(BitmapDescriptorFactory.defaultMarker(
-                                    BitmapDescriptorFactory.HUE_YELLOW))
-            );
-        }
+            final int index = i;
 
-        if (positions.size() >= 2) {
 
-            googleMap.addPolyline(
-                    new PolylineOptions()
-                            .addAll(positions)
-                            .width(8f)
-                            .color(Color.parseColor("#FF9800"))
-            );
+
+            final String markerTitle =
+
+                    (i + 1) + ". " + s.getTitle();
+
+
+
+            final String snippet = query;
+
+
+
+
+
+            // cache 사용
+            if (geocodeCache.containsKey(query)) {
+                LatLng cached = geocodeCache.get(query);
+
+
+
+                runOnUiThread(() -> {
+
+
+
+                    if (cached != null && googleMap != null) {
+
+
+
+                        orderedPositions[index] = cached;
+
+
+
+                        googleMap.addMarker(
+
+                                new MarkerOptions()
+
+                                        .position(cached)
+
+                                        .title(markerTitle)
+
+                                        .snippet(snippet)
+
+                                        .icon(createNumberedMarkerIcon(index + 1))
+
+                        );
+
+                    }
+
+
+
+                    done[0]++;
+
+
+
+                    if (done[0] == total) {
+
+                        onAllGeocodeDone(orderedPositions);
+
+                    }
+
+                });
+            } else {
+
+
+
+                geocode(query, latLng -> {
+
+
+
+                    if (latLng != null) {
+
+                        geocodeCache.put(query, latLng);
+
+                    }
+
+
+
+                    runOnUiThread(() -> {
+
+
+
+                        if (latLng != null && googleMap != null) {
+
+
+
+                            orderedPositions[index] = latLng;
+
+
+
+                            googleMap.addMarker(
+
+                                    new MarkerOptions()
+
+                                            .position(latLng)
+
+                                            .title(markerTitle)
+
+                                            .snippet(snippet)
+
+                                            .icon(createNumberedMarkerIcon(index + 1))
+
+                            );
+
+                        }
+
+
+
+                        done[0]++;
+
+
+
+                        if (done[0] == total) {
+
+                            onAllGeocodeDone(orderedPositions);
+
+                        }
+
+                    });
+
+                });
+
+            }
+
         }
 
         fitCameraToPins(positions);
