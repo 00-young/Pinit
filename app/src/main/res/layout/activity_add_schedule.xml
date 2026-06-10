@@ -82,7 +82,8 @@
                 android:paddingRight="16dp"
                 android:hint="예: 09:00"
                 android:inputType="time"
-                android:layout_marginBottom="16dp"/>
+                android:layout_marginBottom="16dp"
+                android:focusable="false"/>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -101,7 +102,10 @@
                 android:paddingRight="16dp"
                 android:hint="예: 서울특별시 종로구"
                 android:inputType="text"
-                android:layout_marginBottom="16dp"/>
+                android:layout_marginBottom="16dp"
+                android:focusable="false"
+                android:clickable="true"/>
+
 
             <TextView
                 android:layout_width="wrap_content"

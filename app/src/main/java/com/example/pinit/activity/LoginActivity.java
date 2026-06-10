@@ -162,16 +162,31 @@ public class LoginActivity extends AppCompatActivity {
     private void goToMain() {
         FirebaseManager.getInstance().updateFcmToken();
 
-        String email = mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getEmail() : "";
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser == null) return;
+
+        String email = currentUser.getEmail();
         SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+
+        // 1. 닉네임 설정 여부 확인 (기본값 false)
+        boolean nicknameDone = prefs.getBoolean("nickname_done_" + email, false);
+        // 2. 설문조사 완료 여부 확인
         boolean surveyDone = prefs.getBoolean("survey_done_" + email, false);
 
-        if (!surveyDone) {
-            startActivity(new Intent(this, SurveyActivity.class));
-        } else {
-            startActivity(new Intent(this, MainActivity.class));
-        }
-        finish();
-    }
+        Intent intent;
 
+        if (!nicknameDone) {
+            // 닉네임 설정이 안 되어 있으면 닉네임 설정 화면으로 이동
+            intent = new Intent(this, NicknameActivity.class);
+        } else if (!surveyDone) {
+            // 닉네임은 있지만 설문조사가 안 되어 있으면 설문조사 화면으로 이동
+            intent = new Intent(this, SurveyActivity.class);
+        } else {
+            // 둘 다 완료되었다면 메인 화면으로 이동
+            intent = new Intent(this, MainActivity.class);
+        }
+
+        startActivity(intent);
+        finish(); // 로그인 화면을 백스택에서 제거
+    }
 }
