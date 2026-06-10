@@ -33,6 +33,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import android.widget.Toast;
+import android.view.Menu;
+import android.view.MenuItem;
 
 
 
@@ -680,7 +682,7 @@ uploadScheduleToFirestore();
 
 
 
-            if (geocodeCache.containsKey(query)) {
+            positions.add(pos);
 
 
 
@@ -1289,4 +1291,41 @@ uploadScheduleToFirestore();
     @Override
 
     public boolean onSupportNavigateUp() { finish(); return true; }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+
+        getMenuInflater().inflate(
+                R.menu.menu_trip_detail,
+                menu
+        );
+
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+
+        int id = item.getItemId();
+
+        if (id == R.id.action_edit_trip) {
+
+            Intent intent =
+                    new Intent(
+                            this,
+                            AddTripActivity.class
+                    );
+
+            intent.putExtra(
+                    "edit_trip_id",
+                    tripId
+            );
+
+            startActivity(intent);
+
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
 }

@@ -30,5 +30,13 @@ data class EditorBlock(
     var date: String = "",
     var dayTitle: String = "",
 
+    // budget 블록 (지출 예산, 만원 단위)
+    var budgetFood: Int = 0,
+    var budgetTransport: Int = 0,
+    var budgetAccom: Int = 0,
+    var budgetShopping: Int = 0,
+    var budgetSightseeing: Int = 0,
+    var budgetEtc: Int = 0,
+
     var sortOrder: Int = 0
 )

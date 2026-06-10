@@ -4,12 +4,15 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -27,6 +30,7 @@ import com.example.pinit.model.post.Post;
 import com.example.pinit.adapter.ContentBlockAdapter;
 import com.example.pinit.model.post.ContentBlock;
 
+import com.bumptech.glide.Glide;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.Timestamp;
@@ -45,6 +49,7 @@ public class PostDetailFragment extends Fragment {
     private String postId;
     private TextView tvPostTitle;
     private TextView tvAuthorName;
+    private ImageView authorProfileImage;
     private TextView tvPostDate;
     private TextView tvViewCount;
 
@@ -55,6 +60,12 @@ public class PostDetailFragment extends Fragment {
     private ImageView btnActionScrap;
     private ImageView btnActionShare;
     private RecyclerView rvContentBlocks;
+
+    // 새로 추가된 뷰 (여행 설정 & 해시태그 영역)
+    private HorizontalScrollView scrollTravelSettings;
+    private LinearLayout layoutDetailTravelSettings;
+    private HorizontalScrollView scrollHashtags;
+    private LinearLayout layoutDetailHashtags;
 
     private List<Schedule> day1Schedules = new ArrayList<>();
     private List<Schedule> day2Schedules = new ArrayList<>();
@@ -83,6 +94,12 @@ public class PostDetailFragment extends Fragment {
         btnActionShare = view.findViewById(R.id.btnActionShare);
         rvContentBlocks = view.findViewById(R.id.rvContentBlocks);
 
+        // 새 영역 바인딩
+        scrollTravelSettings = view.findViewById(R.id.scrollTravelSettings);
+        layoutDetailTravelSettings = view.findViewById(R.id.layoutDetailTravelSettings);
+        scrollHashtags = view.findViewById(R.id.scrollHashtags);
+        layoutDetailHashtags = view.findViewById(R.id.layoutDetailHashtags);
+
         view.findViewById(R.id.btnBack).setOnClickListener(v -> getParentFragmentManager().popBackStack());
 
         view.findViewById(R.id.btnOpenMyPage).setOnClickListener(v ->
@@ -95,6 +112,7 @@ public class PostDetailFragment extends Fragment {
 
         tvPostTitle = view.findViewById(R.id.tvPostTitle);
         tvAuthorName = view.findViewById(R.id.tvAuthorName);
+        authorProfileImage = view.findViewById(R.id.authorProfileImage);
         tvPostDate = view.findViewById(R.id.tvPostDate);
         tvViewCount = view.findViewById(R.id.tvViewCount); // 레이아웃에 없으면 null (방어 처리됨)
 
@@ -220,15 +238,72 @@ public class PostDetailFragment extends Fragment {
     private void bindPostData(Post post) {
         tvPostTitle.setText(post.getTitle());
         tvAuthorName.setText(post.getUserNickname());
+        loadAuthorProfileImage(post.getUserEmail());
         bindViewCount(post.getViewCount());
+
+        // 1️ 해시태그 화면 표시 로직
+        if (post.getHashtags() != null && !post.getHashtags().isEmpty()) {
+            scrollHashtags.setVisibility(View.VISIBLE);
+            layoutDetailHashtags.removeAllViews();
+            for (String tag : post.getHashtags()) {
+                layoutDetailHashtags.addView(createTagView(tag, true));
+            }
+        }
+
+        //  2️ 여행 설정 화면 표시 로직 (searchIndexPosts 에서 가져오기)
+        db.collection("searchIndexPosts").document(postId).get().addOnSuccessListener(indexDoc -> {
+            if (indexDoc.exists()) {
+                List<String> travelTags = new ArrayList<>();
+
+                String startDate = indexDoc.getString("startDate");
+                String endDate = indexDoc.getString("endDate");
+                if (startDate != null && !startDate.isEmpty()) {
+                    if (endDate != null && !endDate.isEmpty() && !startDate.equals(endDate)) {
+                        travelTags.add(startDate + " ~ " + endDate);
+                    } else {
+                        travelTags.add(startDate);
+                    }
+                }
+
+                String country = indexDoc.getString("country");
+                if (country != null && !country.isEmpty()) travelTags.add(country);
+
+                Long travelerCount = indexDoc.getLong("travelerCount");
+                if (travelerCount != null) {
+                    if (travelerCount == 1L) travelTags.add("혼자");
+                    else if (travelerCount == 2L) travelTags.add("2명");
+                }
+
+                if (!travelTags.isEmpty()) {
+                    scrollTravelSettings.setVisibility(View.VISIBLE);
+                    layoutDetailTravelSettings.removeAllViews();
+                    for (String tag : travelTags) {
+                        layoutDetailTravelSettings.addView(createTagView(tag, false));
+                    }
+                }
+            }
+        });
 
         View authorRow = getView() != null ? getView().findViewById(R.id.authorProfileRow) : null;
         if (authorRow != null) {
             authorRow.setOnClickListener(v -> {
-                getParentFragmentManager().beginTransaction()
-                        .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstanceWithEmail(post.getUserId()))
-                        .addToBackStack(null)
-                        .commit();
+                // 현재 로그인한 내 UID 가져오기
+                String currentUid = FirebaseAuth.getInstance().getCurrentUser() != null ?
+                        FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
+
+                // 내 UID와 게시물 작성자 UID 비교
+                if (post.getUserId() != null && post.getUserId().equals(currentUid)) {
+                    // 내 게시물이면 MyPageFragment로 이동
+                    getParentFragmentManager().beginTransaction()
+                            .replace(R.id.fragmentContainer, new MyPageFragment())
+                            .addToBackStack(null)
+                            .commit();
+                } else {
+                    // 남의 게시물이면 기존대로 OtherMyPageFragment로 이동
+                    getParentFragmentManager().beginTransaction()
+                            .replace(R.id.fragmentContainer, OtherMyPageFragment.newInstance(post.getUserNickname()))
+                            .addToBackStack(null).commit();
+                }
             });
         }
 
@@ -256,6 +331,55 @@ public class PostDetailFragment extends Fragment {
             if (btnEditPost != null) btnEditPost.setVisibility(View.GONE);
             if (btnDeletePost != null) btnDeletePost.setVisibility(View.GONE);
         }
+    }
+
+    //  태그를 예쁘게 만들어주는 헬퍼 메서드
+    private TextView createTagView(String text, boolean isHashtag) {
+        TextView tv = new TextView(getContext());
+        tv.setText(isHashtag && !text.startsWith("#") ? "#" + text : text);
+        tv.setTextColor(Color.parseColor("#333333"));
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
+
+        int paddingHorizontal = (int) (12 * getResources().getDisplayMetrics().density);
+        int paddingVertical = (int) (6 * getResources().getDisplayMetrics().density);
+        tv.setPadding(paddingHorizontal, paddingVertical, paddingHorizontal, paddingVertical);
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, (int) (8 * getResources().getDisplayMetrics().density), 0);
+        tv.setLayoutParams(params);
+
+        GradientDrawable gd = new GradientDrawable();
+        gd.setCornerRadius(40f);
+        if (isHashtag) {
+            gd.setColor(Color.parseColor("#EEEEEE"));
+        } else {
+            gd.setColor(Color.parseColor("#FFFFFF"));
+            gd.setStroke(2, Color.parseColor("#DDDDDD"));
+        }
+        tv.setBackground(gd);
+
+        return tv;
+    }
+
+    private void loadAuthorProfileImage(String email) {
+        if (authorProfileImage == null) return;
+
+        authorProfileImage.setImageResource(R.drawable.bg_profile_avatar);
+        if (email == null || email.isEmpty()) return;
+
+        db.collection("users").document(email).get()
+                .addOnSuccessListener(snapshot -> {
+                    String imageUrl = snapshot.getString("profileImageUrl");
+                    if (imageUrl != null
+                            && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+                        Glide.with(authorProfileImage)
+                                .load(imageUrl)
+                                .placeholder(R.drawable.bg_profile_avatar)
+                                .error(R.drawable.bg_profile_avatar)
+                                .into(authorProfileImage);
+                    }
+                });
     }
 
     private void saveSingleDayToMyTravel(int dayNumber) {
@@ -307,7 +431,7 @@ public class PostDetailFragment extends Fragment {
                 .show();
     }
 
-    // 💡 추가됨: 게시물 수정 로직 (코틀린 파일의 Companion object 호출!)
+    // 추가됨: 게시물 수정 로직 (코틀린 파일의 Companion object 호출!)
     private void editMyPost() {
         Toast.makeText(getContext(), "게시물 수정 화면으로 이동합니다.", Toast.LENGTH_SHORT).show();
 

@@ -161,6 +161,12 @@ public class FirestoreRepository {
                 .addOnSuccessListener(unused -> {
                     Log.d(TAG,
                             "Item 업로드 성공");
+                    db.collection("schedules")
+                            .document(scheduleId)
+                            .update(
+                                    "latitude", schedule.getLatitude(),
+                                    "longitude", schedule.getLongitude()
+                            );
                 })
                 .addOnFailureListener(e -> {
                     Log.e(TAG,

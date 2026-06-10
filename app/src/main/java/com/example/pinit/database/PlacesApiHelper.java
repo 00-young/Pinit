@@ -148,13 +148,13 @@ public class PlacesApiHelper {
             map.put("user_ratings_total", place.optString("user_ratings_total", "0"));
             map.put("types", place.optJSONArray("types") != null
                     ? place.optJSONArray("types").toString() : "");
-            map.put(
-                    "price_level",
-                    place.optString(
-                            "price_level",
-                            "0"
-                    )
-            );
+            map.put("price_level", place.optString("price_level", "0"));
+
+            JSONArray photos = place.optJSONArray("photos");
+            if (photos != null && photos.length() > 0) {
+                String ref = photos.getJSONObject(0).optString("photo_reference", "");
+                map.put("photo_reference", ref);
+            }
 
             JSONObject geometry = place.optJSONObject("geometry");
             if (geometry != null) {

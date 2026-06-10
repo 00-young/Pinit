@@ -9,7 +9,11 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
+
+import com.bumptech.glide.Glide;
+import com.example.pinit.database.PlacesApiHelper;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -79,6 +83,16 @@ public class PlaceAdapter extends RecyclerView.Adapter<PlaceAdapter.ViewHolder> 
 
         holder.tvName.setText(name);
         holder.tvAddress.setText("📍 " + place.getOrDefault("address", ""));
+
+        String photoRef = place.getOrDefault("photo_reference", "");
+        if (!photoRef.isEmpty()) {
+            String photoUrl = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference="
+                    + photoRef + "&key=" + PlacesApiHelper.API_KEY;
+            Glide.with(context).load(photoUrl).centerCrop().into(holder.ivPlacePhoto);
+        } else {
+            holder.ivPlacePhoto.setImageDrawable(null);
+            holder.ivPlacePhoto.setBackgroundColor(0xFFFAFAFA);
+        }
         String rating = place.getOrDefault("rating", "");
         String total = place.getOrDefault("user_ratings_total", "0");
         holder.tvRating.setText(rating.isEmpty() ? "" : "⭐ " + rating + " (" + total + "개 리뷰)");
@@ -197,13 +211,15 @@ public class PlaceAdapter extends RecyclerView.Adapter<PlaceAdapter.ViewHolder> 
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         TextView tvName, tvAddress, tvRating, tvStatus;
+        ImageView ivPlacePhoto;
 
         ViewHolder(View view) {
             super(view);
             tvName = view.findViewById(R.id.tvName);
             tvAddress = view.findViewById(R.id.tvAddress);
             tvRating = view.findViewById(R.id.tvRating);
-            tvStatus = view.findViewById(R.id.tvStatus); // 혼잡도 배지
+            tvStatus = view.findViewById(R.id.tvStatus);
+            ivPlacePhoto = view.findViewById(R.id.ivPlacePhoto);
         }
     }
 }

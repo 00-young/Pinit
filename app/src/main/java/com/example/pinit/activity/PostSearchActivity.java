@@ -31,6 +31,7 @@ public class PostSearchActivity extends AppCompatActivity {
 
     public static final String EXTRA_SEARCH_QUERY = "post_search_query";
     public static final String EXTRA_TRAVEL_SETTINGS = "travel_settings";
+    public static final String EXTRA_PEOPLE = "post_setting_people"; // 추가: 인원 설정 전달용 키
 
     private EditText searchEditText;
     private HorizontalScrollView selectedTagScroller;
@@ -40,6 +41,10 @@ public class PostSearchActivity extends AppCompatActivity {
     private HorizontalScrollView travelSettingTagScroller;
     private ChipGroup travelSettingTagContainer;
     private final List<String> travelSettingTags = new ArrayList<>();
+
+    // 추가: 인원 설정값을 명확하게 분리해서 담아둘 변수
+    private String currentSelectedPeople = "";
+
     private ActivityResultLauncher<Intent> travelSettingLauncher;
 
     private final String[] togetherTags = {
@@ -79,7 +84,13 @@ public class PostSearchActivity extends AppCompatActivity {
                         travelSettingTags.clear();
                         addTravelSettingTag(data.getStringExtra("selectedDate"));
                         addTravelSettingTag(data.getStringExtra("selectedCountry"));
-                        addTravelSettingTag(data.getStringExtra("selectedPeople"));
+
+                        // 추가: 인원 설정을 낚아채서 따로 저장
+                        currentSelectedPeople = data.getStringExtra("selectedPeople");
+                        if (currentSelectedPeople != null && !currentSelectedPeople.isEmpty()) {
+                            addTravelSettingTag(currentSelectedPeople);
+                        }
+
                         renderTravelSettingTags();
                     }
                 }
@@ -129,7 +140,12 @@ public class PostSearchActivity extends AppCompatActivity {
             addTravelSettingTag(startDate);
         }
         addTravelSettingTag(intent.getStringExtra(PostTravelSettingActivity.EXTRA_COUNTRY));
-        addTravelSettingTag(intent.getStringExtra(PostTravelSettingActivity.EXTRA_PEOPLE));
+
+        // 추가: 인원 설정을 복구할 때도 따로 저장해둡니다.
+        currentSelectedPeople = intent.getStringExtra(PostTravelSettingActivity.EXTRA_PEOPLE);
+        if (currentSelectedPeople != null && !currentSelectedPeople.isEmpty()) {
+            addTravelSettingTag(currentSelectedPeople);
+        }
     }
 
     private void addTravelSettingTag(String tag) {
@@ -158,6 +174,10 @@ public class PostSearchActivity extends AppCompatActivity {
             chip.setCloseIconTint(ColorStateList.valueOf(Color.rgb(120, 100, 70)));
             chip.setOnCloseIconClickListener(v -> {
                 travelSettingTags.remove(tag);
+                // X버튼으로 태그를 지울 때, 인원 설정이면 변수도 같이 비워줌
+                if (tag.equals(currentSelectedPeople)) {
+                    currentSelectedPeople = "";
+                }
                 renderTravelSettingTags();
             });
             travelSettingTagContainer.addView(chip);
@@ -203,7 +223,7 @@ public class PostSearchActivity extends AppCompatActivity {
                 query,
                 Pattern.compile("\\d{4}/\\d{2}/\\d{2}\\s*~\\s*\\d{4}/\\d{2}/\\d{2}")
         );
-        return moveMatchesToTravelSettings(withoutDate, Pattern.compile("\\d+~\\d+명|\\d+명"));
+        return moveMatchesToTravelSettings(withoutDate, Pattern.compile("\\d+~\\d+명|\\d+명|혼자|가족"));
     }
 
     private String moveMatchesToTravelSettings(String query, Pattern pattern) {
@@ -211,7 +231,14 @@ public class PostSearchActivity extends AppCompatActivity {
         StringBuffer buffer = new StringBuffer();
 
         while (matcher.find()) {
-            addTravelSettingTag(matcher.group());
+            String match = matcher.group();
+            addTravelSettingTag(match);
+
+            // 정규식으로 걸러진 게 인원 설정이면 변수에 저장
+            if (match.contains("명") || match.equals("혼자") || match.equals("가족")) {
+                currentSelectedPeople = match;
+            }
+
             matcher.appendReplacement(buffer, Matcher.quoteReplacement(" "));
         }
 
@@ -287,6 +314,10 @@ public class PostSearchActivity extends AppCompatActivity {
         intent.putExtra("selected_nav", R.id.nav_community);
         intent.putExtra(EXTRA_SEARCH_QUERY, query);
         intent.putStringArrayListExtra(EXTRA_TRAVEL_SETTINGS, new ArrayList<>(travelSettingTags));
+
+        // 핵심: 인원 설정을 MainActivity에 정확하게 넘겨줍니다
+        intent.putExtra(EXTRA_PEOPLE, currentSelectedPeople);
+
         startActivity(intent);
         finish();
     }
@@ -295,6 +326,8 @@ public class PostSearchActivity extends AppCompatActivity {
         Intent intent = new Intent(this, PostTravelSettingActivity.class);
         intent.putExtra(EXTRA_SEARCH_QUERY, buildSearchQuery());
         intent.putStringArrayListExtra(EXTRA_TRAVEL_SETTINGS, new ArrayList<>(travelSettingTags));
+        // 여행 설정창으로 갈 때도 현재 인원을 들고 갑니다.
+        intent.putExtra(EXTRA_PEOPLE, currentSelectedPeople);
         travelSettingLauncher.launch(intent);
     }
 

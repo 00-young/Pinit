@@ -11,15 +11,22 @@ import androidx.appcompat.widget.Toolbar;
 
 import com.example.pinit.R;
 import com.example.pinit.database.DatabaseHelper;
+import com.example.pinit.database.FirestoreRepository;
 import com.example.pinit.model.Trip;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.Locale;
 
 public class AddTripActivity extends AppCompatActivity {
 
     private EditText etTitle, etDestination, etStartDate, etEndDate, etBudget, etMemo;
     private DatabaseHelper dbHelper;
+    private int editTripId = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,18 +41,74 @@ public class AddTripActivity extends AppCompatActivity {
         }
 
         dbHelper = new DatabaseHelper(this);
+        editTripId = getIntent().getIntExtra("edit_trip_id", -1);
         etTitle = findViewById(R.id.etTitle);
         etDestination = findViewById(R.id.etDestination);
         etStartDate = findViewById(R.id.etStartDate);
         etEndDate = findViewById(R.id.etEndDate);
         etBudget = findViewById(R.id.etBudget);
         etMemo = findViewById(R.id.etMemo);
+        if (editTripId != -1) {
 
-        Calendar cal = Calendar.getInstance();
-        String today = String.format(Locale.KOREA, "%d-%02d-%02d",
-                cal.get(Calendar.YEAR), cal.get(Calendar.MONTH)+1, cal.get(Calendar.DAY_OF_MONTH));
-        etStartDate.setText(today);
-        etEndDate.setText(today);
+            Trip trip =
+                    dbHelper.getTripById(
+                            editTripId
+                    );
+
+            if (trip != null) {
+
+                if (getSupportActionBar() != null) {
+                    getSupportActionBar()
+                            .setTitle("여행 수정");
+                }
+
+                etTitle.setText(
+                        trip.getTitle()
+                );
+
+                etDestination.setText(
+                        trip.getDestination()
+                );
+
+                etStartDate.setText(
+                        trip.getStartDate()
+                );
+
+                etEndDate.setText(
+                        trip.getEndDate()
+                );
+
+                etBudget.setText(
+                        String.valueOf(
+                                trip.getBudget()
+                        )
+                );
+
+                etMemo.setText(
+                        trip.getMemo()
+                );
+
+                ((Button)findViewById(R.id.btnSave))
+                        .setText("수정 완료");
+            }
+        }
+
+        if (editTripId == -1) {
+
+            Calendar cal = Calendar.getInstance();
+
+            String today =
+                    String.format(
+                            Locale.KOREA,
+                            "%d-%02d-%02d",
+                            cal.get(Calendar.YEAR),
+                            cal.get(Calendar.MONTH)+1,
+                            cal.get(Calendar.DAY_OF_MONTH)
+                    );
+
+            etStartDate.setText(today);
+            etEndDate.setText(today);
+        }
 
         etStartDate.setOnClickListener(v -> showDatePicker(etStartDate));
         etEndDate.setOnClickListener(v -> showDatePicker(etEndDate));
@@ -68,6 +131,15 @@ public class AddTripActivity extends AppCompatActivity {
             Toast.makeText(this, "여행 이름과 목적지를 입력해주세요.", Toast.LENGTH_SHORT).show();
             return;
         }
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.KOREA);
+            Date start = sdf.parse(etStartDate.getText().toString());
+            Date end = sdf.parse(etEndDate.getText().toString());
+            if (start != null && end != null && start.after(end)) {
+                Toast.makeText(this, "출발일이 귀국일보다 늦을 수 없습니다.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        } catch (ParseException ignored) {}
         Trip t = new Trip();
         t.setTitle(title);
         t.setDestination(destination);
@@ -75,8 +147,52 @@ public class AddTripActivity extends AppCompatActivity {
         t.setEndDate(etEndDate.getText().toString());
         t.setBudget(etBudget.getText().toString().isEmpty() ? 0 : Double.parseDouble(etBudget.getText().toString()));
         t.setMemo(etMemo.getText().toString());
-        dbHelper.insertTrip(t);
-        Toast.makeText(this, "여행이 추가되었습니다!", Toast.LENGTH_SHORT).show();
+        if (editTripId != -1) {
+
+            t.setId(editTripId);
+
+            dbHelper.updateTrip(t);
+
+            FirebaseUser user =
+                    FirebaseAuth.getInstance()
+                            .getCurrentUser();
+
+            if (user != null) {
+
+                FirestoreRepository repository =
+                        new FirestoreRepository();
+
+                String scheduleId =
+                        user.getUid()
+                                + "_"
+                                + editTripId;
+
+                repository.updateSchedule(
+                        scheduleId,
+                        t.getTitle(),
+                        t.getStartDate(),
+                        t.getEndDate(),
+                        t.getDestination(),
+                        t.getBudget()
+                );
+            }
+
+            Toast.makeText(
+                    this,
+                    "여행이 수정되었습니다!",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+        } else {
+
+            dbHelper.insertTrip(t);
+
+            Toast.makeText(
+                    this,
+                    "여행이 추가되었습니다!",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
         finish();
     }
 
