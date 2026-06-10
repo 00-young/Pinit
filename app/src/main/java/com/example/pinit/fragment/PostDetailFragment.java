@@ -430,7 +430,7 @@ public class PostDetailFragment extends Fragment {
         }
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
         String originalTitle = tvPostTitle.getText().toString();
-        String newScheduleTitle = originalTitle + " (전체 스크랩)";
+        String newScheduleTitle = originalTitle;
 
         DocumentReference newScheduleRef = db.collection("schedules").document();
         Map<String, Object> scheduleData = new HashMap<>();
@@ -461,7 +461,7 @@ public class PostDetailFragment extends Fragment {
         }
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
         String originalTitle = tvPostTitle.getText().toString();
-        String newScheduleTitle = originalTitle + " - DAY " + dayNumber + " (스크랩)";
+        String newScheduleTitle = originalTitle + " - DAY " + dayNumber;
 
         DocumentReference newScheduleRef = db.collection("schedules").document();
         Map<String, Object> scheduleData = new HashMap<>();
