@@ -72,16 +72,8 @@ public class BudgetFragment extends Fragment {
         recyclerView = view.findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new BudgetAdapter(requireContext(), new ArrayList<>(), id -> {
-            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                    .setTitle("지출 내역 삭제")
-                    .setMessage("이 지출 내역을 삭제하시겠습니까?")
-                    .setPositiveButton("삭제", (dialog, which) -> {
-                        dbHelper.deleteBudget(id);
-                        loadBudgets();
-                        Toast.makeText(requireContext(), "삭제되었습니다.", Toast.LENGTH_SHORT).show();
-                    })
-                    .setNegativeButton("취소", null)
-                    .show();
+            dbHelper.deleteBudget(id);
+            loadBudgets();
         });
         recyclerView.setAdapter(adapter);
 
@@ -206,16 +198,8 @@ public class BudgetFragment extends Fragment {
         tvCatEtc.setText(fmt.format(etc) + "원");
 
         adapter = new BudgetAdapter(requireContext(), budgets, id -> {
-            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                    .setTitle("지출 내역 삭제")
-                    .setMessage("이 지출 내역을 삭제하시겠습니까?")
-                    .setPositiveButton("삭제", (dialog, which) -> {
-                        dbHelper.deleteBudget(id);
-                        loadBudgets();
-                        Toast.makeText(requireContext(), "삭제되었습니다.", Toast.LENGTH_SHORT).show();
-                    })
-                    .setNegativeButton("취소", null)
-                    .show();
+            dbHelper.deleteBudget(id);
+            loadBudgets();
         });
         recyclerView.setAdapter(adapter);
     }

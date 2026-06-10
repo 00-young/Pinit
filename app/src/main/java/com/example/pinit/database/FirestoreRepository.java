@@ -134,7 +134,8 @@ public class FirestoreRepository {
         item.put("title", schedule.getTitle());
         item.put("time", schedule.getTime());
 
-        // 현재 구조: title = 장소명
+        // 현재 구조:
+        // title = 장소명
         item.put("placeName", schedule.getTitle());
 
         item.put("memo", schedule.getMemo());
@@ -174,4 +175,149 @@ public class FirestoreRepository {
                 });
     }
 
+    public void deleteItem(
+            String scheduleId,
+            String dayId,
+            String itemId
+    ) {
+
+        db.collection("schedules")
+                .document(scheduleId)
+                .collection("days")
+                .document(dayId)
+                .collection("items")
+                .document(itemId)
+                .delete()
+                .addOnSuccessListener(unused -> {
+                    Log.d(TAG, "Item 삭제 성공");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Item 삭제 실패", e);
+                });
+    }
+
+    public void deleteSchedule(String scheduleId) {
+
+        db.collection("schedules")
+                .document(scheduleId)
+                .collection("days")
+                .get()
+                .addOnSuccessListener(daySnapshots -> {
+
+                    for (com.google.firebase.firestore.QueryDocumentSnapshot dayDoc
+                            : daySnapshots) {
+
+                        String dayId = dayDoc.getId();
+
+                        // =========================
+                        // items 삭제
+                        // =========================
+
+                        db.collection("schedules")
+                                .document(scheduleId)
+                                .collection("days")
+                                .document(dayId)
+                                .collection("items")
+                                .get()
+                                .addOnSuccessListener(itemSnapshots -> {
+
+                                    for (com.google.firebase.firestore.QueryDocumentSnapshot itemDoc
+                                            : itemSnapshots) {
+
+                                        itemDoc.getReference().delete();
+                                    }
+
+                                    // =========================
+                                    // day 삭제
+                                    // =========================
+
+                                    dayDoc.getReference().delete();
+                                });
+                    }
+
+                    // =========================
+                    // 마지막에 schedule 삭제
+                    // =========================
+
+                    db.collection("schedules")
+                            .document(scheduleId)
+                            .delete()
+                            .addOnSuccessListener(unused -> {
+                                Log.d(TAG,
+                                        "Schedule 전체 삭제 성공");
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG,
+                                        "Schedule 전체 삭제 실패", e);
+                            });
+                });
+    }
+
+    public void updateSchedule(
+            String scheduleId,
+            String title,
+            String startDate,
+            String endDate,
+            String city,
+            double totalBudget
+    ) {
+
+        Map<String, Object> updates = new HashMap<>();
+
+        updates.put("title", title);
+        updates.put("startDate", startDate);
+        updates.put("endDate", endDate);
+        updates.put("city", city);
+        updates.put("totalBudget", totalBudget);
+
+        db.collection("schedules")
+                .document(scheduleId)
+                .update(updates)
+                .addOnSuccessListener(unused -> {
+                    Log.d(TAG, "Schedule 수정 성공");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Schedule 수정 실패", e);
+                });
+    }
+
+    public void updateItem(
+            String scheduleId,
+            String dayId,
+            String itemId,
+            Schedule schedule
+    ) {
+
+        Map<String, Object> item = new HashMap<>();
+
+        item.put("title", schedule.getTitle());
+        item.put("time", schedule.getTime());
+
+        item.put("placeName", schedule.getTitle());
+
+        item.put("memo", schedule.getMemo());
+        item.put("color", schedule.getColor());
+
+        item.put("address", schedule.getPlaceName());
+
+        item.put("latitude", schedule.getLatitude());
+        item.put("longitude", schedule.getLongitude());
+
+        item.put("category", schedule.getCategory());
+        item.put("googlePlaceId", schedule.getGooglePlaceId());
+
+        db.collection("schedules")
+                .document(scheduleId)
+                .collection("days")
+                .document(dayId)
+                .collection("items")
+                .document(itemId)
+                .update(item)
+                .addOnSuccessListener(unused -> {
+                    Log.d(TAG, "Item 수정 성공");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Item 수정 실패", e);
+                });
+    }
 }

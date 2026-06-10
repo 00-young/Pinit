@@ -32,7 +32,6 @@
         <activity android:name=".activity.TripDetailActivity" android:exported="false" />
         <activity android:name=".activity.AddTripActivity" android:exported="false" />
         <activity android:name=".activity.AddScheduleActivity" android:exported="false" />
-        <activity android:name=".activity.MapActivity" android:exported="false" />
         <activity android:name=".activity.PlaceSearchActivity" android:exported="false" />
         <activity android:name=".activity.PlaceDetailActivity" android:exported="false" />
         <activity android:name=".activity.NearbyPlacesActivity" android:exported="false" />
@@ -40,7 +39,6 @@
         <activity android:name=".activity.TripRecordActivity" android:exported="false" />
         <activity android:name=".activity.ReceiptScanActivity" android:exported="false" />
         <activity android:name=".activity.TripSummaryActivity" android:exported="false" />
-        <activity android:name=".activity.NicknameActivity" android:exported="false" />
 
         <activity android:name=".activity.TestUserListActivity"
             android:exported="false" />
