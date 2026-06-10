@@ -676,16 +676,8 @@ uploadScheduleToFirestore();
 
 
 
-// cache 사용
-
-
-
-
-
-            positions.add(pos);
-
-
-
+            // cache 사용
+            if (geocodeCache.containsKey(query)) {
                 LatLng cached = geocodeCache.get(query);
 
 
@@ -731,9 +723,6 @@ uploadScheduleToFirestore();
                     }
 
                 });
-
-
-
             } else {
 
 

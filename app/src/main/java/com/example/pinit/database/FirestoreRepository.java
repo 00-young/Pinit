@@ -65,6 +65,36 @@ public class FirestoreRepository {
                 });
     }
 
+    public void updateSchedule(
+            String scheduleId,
+            String title,
+            String startDate,
+            String endDate,
+            String destination,
+            double budget
+    ) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("title", title);
+        updates.put("startDate", startDate);
+        updates.put("endDate", endDate);
+        updates.put("city", destination);
+        updates.put("totalBudget", budget);
+
+        db.collection("schedules")
+                .document(scheduleId)
+                .update(updates)
+                .addOnSuccessListener(unused -> Log.d(TAG, "Schedule 업데이트 성공"))
+                .addOnFailureListener(e -> Log.e(TAG, "Schedule 업데이트 실패", e));
+    }
+
+    public void deleteSchedule(String scheduleId) {
+        db.collection("schedules")
+                .document(scheduleId)
+                .delete()
+                .addOnSuccessListener(unused -> Log.d(TAG, "Schedule 삭제 성공"))
+                .addOnFailureListener(e -> Log.e(TAG, "Schedule 삭제 실패", e));
+    }
+
     public void uploadBudget(
             String budgetId,
             long tripId,
@@ -172,6 +202,31 @@ public class FirestoreRepository {
                     Log.e(TAG,
                             "Item 업로드 실패", e);
                 });
+    }
+
+    public void updateItem(
+            String scheduleId,
+            String dayId,
+            String itemId,
+            Schedule schedule
+    ) {
+        uploadItem(scheduleId, dayId, itemId, schedule);
+    }
+
+    public void deleteItem(
+            String scheduleId,
+            String dayId,
+            String itemId
+    ) {
+        db.collection("schedules")
+                .document(scheduleId)
+                .collection("days")
+                .document(dayId)
+                .collection("items")
+                .document(itemId)
+                .delete()
+                .addOnSuccessListener(unused -> Log.d(TAG, "Item 삭제 성공"))
+                .addOnFailureListener(e -> Log.e(TAG, "Item 삭제 실패", e));
     }
 
 }
