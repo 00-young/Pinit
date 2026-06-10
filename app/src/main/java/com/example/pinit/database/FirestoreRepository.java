@@ -164,7 +164,8 @@ public class FirestoreRepository {
         item.put("title", schedule.getTitle());
         item.put("time", schedule.getTime());
 
-        // 현재 구조: title = 장소명
+        // 현재 구조:
+        // title = 장소명
         item.put("placeName", schedule.getTitle());
 
         item.put("memo", schedule.getMemo());

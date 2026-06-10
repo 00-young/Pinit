@@ -1,17 +1,12 @@
 package com.example.pinit.activity;
 
 import android.app.DatePickerDialog;
-import android.content.Intent;
 import android.os.Bundle;
 import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
-import androidx.activity.result.ActivityResult;
-import androidx.activity.result.ActivityResultCallback;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 
 import com.example.pinit.R;
 import com.example.pinit.database.DatabaseHelper;
@@ -80,7 +75,6 @@ public class AddScheduleActivity extends AppCompatActivity {
             }
         }
 
-        // 1. 날짜 선택 리스너
         etDate.setOnClickListener(v -> {
             Calendar c = Calendar.getInstance();
             new DatePickerDialog(this, (view, year, month, day) ->
@@ -88,39 +82,7 @@ public class AddScheduleActivity extends AppCompatActivity {
                     c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show();
         });
 
-        // 저장 버튼 클릭 리스너
         findViewById(R.id.btnSave).setOnClickListener(v -> saveSchedule());
-
-        // 2. 시간 선택 리스너
-        etTime.setOnClickListener(v -> {
-            Calendar c = Calendar.getInstance();
-            int hour = c.get(Calendar.HOUR_OF_DAY);
-            int minute = c.get(Calendar.MINUTE);
-
-            new android.app.TimePickerDialog(this, (view, selectedHour, selectedMinute) -> {
-                etTime.setText(String.format(Locale.KOREA, "%02d:%02d", selectedHour, selectedMinute));
-            }, hour, minute, false).show();
-        });
-
-        // 3. 지도 콜백 등록
-        mapActivityResultLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                new ActivityResultCallback<ActivityResult>() {
-                    @Override
-                    public void onActivityResult(ActivityResult result) {
-                        if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                            String placeName = result.getData().getStringExtra("place_name");
-                            etPlaceName.setText(placeName);
-                        }
-                    }
-                }
-        );
-
-        // 4. 장소 선택 리스너
-        etPlaceName.setOnClickListener(v -> {
-            Intent intent = new Intent(AddScheduleActivity.this, MapActivity.class);
-            mapActivityResultLauncher.launch(intent);
-        });
     }
 
     private void saveSchedule() {
