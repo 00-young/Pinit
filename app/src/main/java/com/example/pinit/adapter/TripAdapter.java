@@ -74,11 +74,10 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.ViewHolder> {
         holder.itemView.setOnClickListener(v -> clickListener.onClick(t));
         holder.itemView.setOnLongClickListener(v -> { longClickListener.onClick(t); return true; });
 
-        // 상세보기 → TripDetailActivity
+        // 상세보기 버튼을 눌렀을 때도 카드 전체를 누른 것과 똑같이 프래그먼트의 리스너가 작동하도록 토스해 줍니다.
         holder.btnDetail.setOnClickListener(v -> {
-            Intent intent = new Intent(context, TripDetailActivity.class);
-            intent.putExtra("trip_id", t.getId());
-            context.startActivity(intent);
+            // 기존에 정의된 변수 이름인 clickListener와 t를 그대로 사용합니다!
+            clickListener.onClick(t);
         });
 
         // 여행요약 → TripSummaryActivity (★ 변경)

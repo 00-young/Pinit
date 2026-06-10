@@ -10,28 +10,32 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
 import com.example.pinit.R;
-import com.example.pinit.database.DatabaseHelper;
-import com.example.pinit.database.FirestoreRepository;
 import com.example.pinit.model.Trip;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 public class AddTripActivity extends AppCompatActivity {
 
     private EditText etTitle, etDestination, etStartDate, etEndDate, etBudget, etMemo;
-    private DatabaseHelper dbHelper;
-    private int editTripId = -1;
+    private FirebaseFirestore db; // 💡 로컬 DB 대신 파이어베이스 인스턴스 도입
+    private String firestoreDocId = null; // 💡 수정할 파이어베이스 문서 ID
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_add_trip);
+
+        db = FirebaseFirestore.getInstance();
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -40,72 +44,55 @@ public class AddTripActivity extends AppCompatActivity {
             getSupportActionBar().setTitle("여행 추가");
         }
 
-        dbHelper = new DatabaseHelper(this);
-        editTripId = getIntent().getIntExtra("edit_trip_id", -1);
         etTitle = findViewById(R.id.etTitle);
         etDestination = findViewById(R.id.etDestination);
         etStartDate = findViewById(R.id.etStartDate);
         etEndDate = findViewById(R.id.etEndDate);
         etBudget = findViewById(R.id.etBudget);
         etMemo = findViewById(R.id.etMemo);
-        if (editTripId != -1) {
 
-            Trip trip =
-                    dbHelper.getTripById(
-                            editTripId
-                    );
+        // 인텐트 데이터 수신 (수정 모드 대비)
+        firestoreDocId = getIntent().getStringExtra("firestore_doc_id");
+        int editTripId = getIntent().getIntExtra("edit_trip_id", -1);
 
-            if (trip != null) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
 
-                if (getSupportActionBar() != null) {
-                    getSupportActionBar()
-                            .setTitle("여행 수정");
-                }
-
-                etTitle.setText(
-                        trip.getTitle()
-                );
-
-                etDestination.setText(
-                        trip.getDestination()
-                );
-
-                etStartDate.setText(
-                        trip.getStartDate()
-                );
-
-                etEndDate.setText(
-                        trip.getEndDate()
-                );
-
-                etBudget.setText(
-                        String.valueOf(
-                                trip.getBudget()
-                        )
-                );
-
-                etMemo.setText(
-                        trip.getMemo()
-                );
-
-                ((Button)findViewById(R.id.btnSave))
-                        .setText("수정 완료");
-            }
+        // 💡 방어 코드: 만약 문서 ID가 없는데 정수 ID가 넘어왔다면 규격(uid_tripId)대로 강제 매핑 복원
+        if (firestoreDocId == null && user != null && editTripId != -1) {
+            firestoreDocId = user.getUid() + "_" + editTripId;
         }
 
-        if (editTripId == -1) {
+        // =========================================================
+        // 💡 [수정 모드] 파이어베이스에서 실시간으로 읽어와 빈칸 채우기
+        // =========================================================
+        if (firestoreDocId != null) {
+            db.collection("schedules").document(firestoreDocId).get().addOnSuccessListener(doc -> {
+                if (doc.exists()) {
+                    if (getSupportActionBar() != null) {
+                        getSupportActionBar().setTitle("여행 수정");
+                    }
 
+                    etTitle.setText(doc.getString("title"));
+                    etDestination.setText(doc.getString("country")); // destination 매칭
+                    etStartDate.setText(doc.getString("startDate"));
+                    etEndDate.setText(doc.getString("endDate"));
+
+                    Double budget = doc.getDouble("budget");
+                    etBudget.setText(budget != null ? String.valueOf(budget.intValue()) : "0");
+                    etMemo.setText(doc.getString("memo"));
+
+                    ((Button) findViewById(R.id.btnSave)).setText("수정 완료");
+                }
+            }).addOnFailureListener(e -> {
+                Toast.makeText(this, "데이터를 불러오지 못했습니다.", Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        // [추가 모드] 기본 날짜 오늘로 세팅
+        if (firestoreDocId == null) {
             Calendar cal = Calendar.getInstance();
-
-            String today =
-                    String.format(
-                            Locale.KOREA,
-                            "%d-%02d-%02d",
-                            cal.get(Calendar.YEAR),
-                            cal.get(Calendar.MONTH)+1,
-                            cal.get(Calendar.DAY_OF_MONTH)
-                    );
-
+            String today = String.format(Locale.KOREA, "%d-%02d-%02d",
+                    cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH));
             etStartDate.setText(today);
             etEndDate.setText(today);
         }
@@ -114,23 +101,34 @@ public class AddTripActivity extends AppCompatActivity {
         etEndDate.setOnClickListener(v -> showDatePicker(etEndDate));
 
         Button btnSave = findViewById(R.id.btnSave);
-        btnSave.setOnClickListener(v -> saveTrip());
+        btnSave.setOnClickListener(v -> saveTripToFirebase());
     }
 
     private void showDatePicker(EditText et) {
         Calendar c = Calendar.getInstance();
         new DatePickerDialog(this, (view, year, month, day) ->
-                et.setText(String.format(Locale.KOREA, "%d-%02d-%02d", year, month+1, day)),
+                et.setText(String.format(Locale.KOREA, "%d-%02d-%02d", year, month + 1, day)),
                 c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show();
     }
 
-    private void saveTrip() {
+    // =========================================================
+    // 💡 순수 파이어베이스 저장 및 수정 로직
+    // =========================================================
+    private void saveTripToFirebase() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Toast.makeText(this, "로그인이 필요합니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         String title = etTitle.getText().toString().trim();
         String destination = etDestination.getText().toString().trim();
+
         if (title.isEmpty() || destination.isEmpty()) {
             Toast.makeText(this, "여행 이름과 목적지를 입력해주세요.", Toast.LENGTH_SHORT).show();
             return;
         }
+
         try {
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.KOREA);
             Date start = sdf.parse(etStartDate.getText().toString());
@@ -140,60 +138,38 @@ public class AddTripActivity extends AppCompatActivity {
                 return;
             }
         } catch (ParseException ignored) {}
-        Trip t = new Trip();
-        t.setTitle(title);
-        t.setDestination(destination);
-        t.setStartDate(etStartDate.getText().toString());
-        t.setEndDate(etEndDate.getText().toString());
-        t.setBudget(etBudget.getText().toString().isEmpty() ? 0 : Double.parseDouble(etBudget.getText().toString()));
-        t.setMemo(etMemo.getText().toString());
-        if (editTripId != -1) {
 
-            t.setId(editTripId);
+        // 파이어베이스 업로드용 Map 생성 (HomeFragment 컬렉션 필드와 100% 일치)
+        Map<String, Object> data = new HashMap<>();
+        data.put("userId", user.getUid());
+        data.put("title", title);
+        data.put("country", destination); // HomeFragment 가 읽어오는 키 명칭
+        data.put("startDate", etStartDate.getText().toString());
+        data.put("endDate", etEndDate.getText().toString());
+        data.put("budget", etBudget.getText().toString().isEmpty() ? 0.0 : Double.parseDouble(etBudget.getText().toString()));
+        data.put("memo", etMemo.getText().toString());
 
-            dbHelper.updateTrip(t);
-
-            FirebaseUser user =
-                    FirebaseAuth.getInstance()
-                            .getCurrentUser();
-
-            if (user != null) {
-
-                FirestoreRepository repository =
-                        new FirestoreRepository();
-
-                String scheduleId =
-                        user.getUid()
-                                + "_"
-                                + editTripId;
-
-                repository.updateSchedule(
-                        scheduleId,
-                        t.getTitle(),
-                        t.getStartDate(),
-                        t.getEndDate(),
-                        t.getDestination(),
-                        t.getBudget()
-                );
-            }
-
-            Toast.makeText(
-                    this,
-                    "여행이 수정되었습니다!",
-                    Toast.LENGTH_SHORT
-            ).show();
-
+        if (firestoreDocId != null) {
+            // 1️ [수정 완료] 버튼 분기 처리
+            db.collection("schedules").document(firestoreDocId).update(data)
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(this, "여행이 수정되었습니다!", Toast.LENGTH_SHORT).show();
+                        finish();
+                    })
+                    .addOnFailureListener(e -> Toast.makeText(this, "수정 실패", Toast.LENGTH_SHORT).show());
         } else {
+            // 2️ [새 여행 추가] 버튼 분기 처리
+            // 다른 액티비티들과의 정수형 ID 호환성을 유지하기 위해 타임스탬프 기반 정수 추출 고유 난수 생성
+            int newTripId = (int) (System.currentTimeMillis() % 100000000);
+            String syncDocId = user.getUid() + "_" + newTripId;
 
-            dbHelper.insertTrip(t);
-
-            Toast.makeText(
-                    this,
-                    "여행이 추가되었습니다!",
-                    Toast.LENGTH_SHORT
-            ).show();
+            db.collection("schedules").document(syncDocId).set(data)
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(this, "여행이 추가되었습니다!", Toast.LENGTH_SHORT).show();
+                        finish();
+                    })
+                    .addOnFailureListener(e -> Toast.makeText(this, "추가 실패", Toast.LENGTH_SHORT).show());
         }
-        finish();
     }
 
     @Override

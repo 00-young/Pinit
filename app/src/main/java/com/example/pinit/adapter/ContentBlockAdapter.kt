@@ -4,8 +4,8 @@ import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.TextView
 
 import androidx.recyclerview.widget.RecyclerView
@@ -14,6 +14,7 @@ import com.bumptech.glide.Glide
 import com.example.pinit.R
 import com.example.pinit.model.map.MapData
 import com.example.pinit.model.post.ContentBlock
+import com.example.pinit.model.Schedule
 
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -23,21 +24,44 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.PolylineOptions
+import java.util.ArrayList
 
-/**
- * 게시글 본문 블록 렌더링 (Notion 스타일).
- * 타입: text | image | place | map
- *
- * DAY 는 작성 시 map → place → text/image → place ... 순으로 펼쳐져 저장되므로
- * 여기서는 각 블록을 순서대로 그리기만 하면 된다.
- *
- * map 블록은 MapData.markers 의 저장된 좌표로 즉시 핀/동선을 그린다(geocode 불필요).
- */
 class ContentBlockAdapter(
-    blocks: List<ContentBlock>?
+    blocks: List<ContentBlock>?,
+    private val saveListener: OnScheduleSaveListener? = null
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
+    // 💡 인터페이스는 오직 몇 번째 DAY 인지만 넘기도록 확실하게 1개로 통일 (자바 람다 에러 해결)
+    interface OnScheduleSaveListener {
+        fun onSaveClick(dayNumber: Int)
+    }
+
     private val blocks: List<ContentBlock> = blocks ?: emptyList()
+
+    // 💡 자바 프래그먼트에서 에러 없이 일정을 추출할 수 있도록 제공하는 안전한 public 함수
+    fun getSchedulesForDay(dayNumber: Int): ArrayList<Schedule> {
+        val scheduleList = ArrayList<Schedule>()
+        blocks.forEach { b ->
+            if (b.type == ContentBlock.TYPE_MAP) {
+                val title = b.dayTitle ?: ""
+                val dayNum = title.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 1
+                if (dayNum == dayNumber) {
+                    b.mapData?.markers?.forEach { marker ->
+                        val s = Schedule().apply {
+                            this.title = marker.title ?: ""
+                            this.placeName = marker.title ?: ""
+                            this.latitude = marker.lat
+                            this.longitude = marker.lng
+                            this.color = "#FFDA44"
+                            this.date = b.date ?: ""
+                        }
+                        scheduleList.add(s)
+                    }
+                }
+            }
+        }
+        return scheduleList
+    }
 
     companion object {
         private const val VIEW_TEXT = 0
@@ -73,28 +97,24 @@ class ContentBlockAdapter(
             is TextVH -> holder.bind(block)
             is ImageVH -> holder.bind(block)
             is PlaceVH -> holder.bind(block)
-            is MapVH -> holder.bind(block)
+            is MapVH -> holder.bind(block, saveListener)
             is BudgetVH -> holder.bind(block)
         }
     }
 
     override fun getItemCount(): Int = blocks.size
 
-    // =====================================================
-    // ViewHolders
-    // =====================================================
-
     class TextVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvText: TextView = itemView.findViewById(R.id.tvBlockText)
-        fun bind(b: ContentBlock) { tvText.text = b.textContent }
+        fun bind(b: ContentBlock) { tvText.text = b.textContent ?: "" }
     }
 
     class ImageVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val ivImage: ImageView = itemView.findViewById(R.id.ivBlockImage)
         private val tvCaption: TextView = itemView.findViewById(R.id.tvBlockCaption)
         fun bind(b: ContentBlock) {
-            Glide.with(ivImage.context).load(b.imageUrl).into(ivImage)
-            if (b.textContent.isEmpty()) {
+            Glide.with(ivImage.context).load(b.imageUrl ?: "").into(ivImage)
+            if ((b.textContent ?: "").isEmpty()) {
                 tvCaption.visibility = View.GONE
             } else {
                 tvCaption.visibility = View.VISIBLE
@@ -103,13 +123,12 @@ class ContentBlockAdapter(
         }
     }
 
-    /** place 블록: 핀 아이콘 + 장소명 (+ 주소) */
     class PlaceVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvName: TextView = itemView.findViewById(R.id.tvBlockPlaceName)
         private val tvAddress: TextView = itemView.findViewById(R.id.tvBlockPlaceAddress)
         fun bind(b: ContentBlock) {
-            tvName.text = b.placeName
-            if (b.placeAddress.isEmpty()) {
+            tvName.text = b.placeName ?: ""
+            if ((b.placeAddress ?: "").isEmpty()) {
                 tvAddress.visibility = View.GONE
             } else {
                 tvAddress.visibility = View.VISIBLE
@@ -118,21 +137,28 @@ class ContentBlockAdapter(
         }
     }
 
-    /** map 블록: DAY 제목 + 지도(동선+핀) + 요약리스트(①②③ + 더보기) */
     class MapVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvDayTitle: TextView = itemView.findViewById(R.id.tvBlockMapDayTitle)
         private val layoutSummary: LinearLayout = itemView.findViewById(R.id.layoutBlockMapSummary)
         private val btnReadMore: TextView? = itemView.findViewById(R.id.btnBlockMapReadMore)
         private val mapView: MapView? = itemView.findViewById(R.id.blockMapView)
-        fun bind(b: ContentBlock) {
-            tvDayTitle.text = if (b.dayTitle.isNotEmpty()) "${b.dayTitle} (${b.date})" else b.date
+        private val btnSaveSingleDay: TextView? = itemView.findViewById(R.id.btnSaveSingleDay)
 
-            // 요약 리스트: markers 의 title 을 순서대로
+        fun bind(b: ContentBlock, listener: OnScheduleSaveListener?) {
+            val titleText = b.dayTitle ?: ""
+            val dateText = b.date ?: ""
+            tvDayTitle.text = if (titleText.isNotEmpty()) "$titleText ($dateText)" else dateText
+
+            btnSaveSingleDay?.setOnClickListener {
+                val dayNum = titleText.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 1
+                listener?.onSaveClick(dayNum)
+            }
+
             val markers = b.mapData?.markers ?: emptyList()
             layoutSummary.removeAllViews()
             markers.forEachIndexed { index, m ->
                 val tv = TextView(layoutSummary.context).apply {
-                    text = "${index + 1}. ${m.title}"
+                    text = "${index + 1}. ${m.title ?: ""}"
                     setTextColor(0xFF222222.toInt())
                     setPadding(0, 10, 0, 10)
                     textSize = 15f
@@ -161,7 +187,6 @@ class ContentBlockAdapter(
         }
     }
 
-    /** budget 블록: 항목별 예산 + 총합 (만원 단위) */
     class BudgetVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvTotal: TextView = itemView.findViewById(R.id.tvBlockBudgetTotal)
         private val tvFood: TextView = itemView.findViewById(R.id.tvBlockBudgetFood)
@@ -184,9 +209,6 @@ class ContentBlockAdapter(
     }
 }
 
-// =====================================================
-// MapData(markers 좌표) -> 핀/동선 그리기 (저장 좌표 사용, geocode 불필요)
-// =====================================================
 private fun drawMapData(googleMap: GoogleMap, mapData: MapData?) {
     val markers = mapData?.markers ?: emptyList()
     if (markers.isEmpty()) {
@@ -198,8 +220,8 @@ private fun drawMapData(googleMap: GoogleMap, mapData: MapData?) {
         googleMap.addMarker(
             MarkerOptions()
                 .position(LatLng(m.lat, m.lng))
-                .title(if (m.title.isNotEmpty()) "${i + 1}. ${m.title}" else "${i + 1}")
-                .snippet(m.description)
+                .title(if ((m.title ?: "").isNotEmpty()) "${i + 1}. ${m.title}" else "${i + 1}")
+                .snippet(m.description ?: "")
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW))
         )
     }
