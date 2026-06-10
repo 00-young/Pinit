@@ -1,6 +1,7 @@
 package com.example.pinit.fragment;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -25,6 +26,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.pinit.R;
+import com.example.pinit.activity.SurveyActivity;
 import com.example.pinit.data.MyFollow;
 import com.example.pinit.model.User;
 import com.example.pinit.model.post.Post;
@@ -222,6 +224,7 @@ public class MyPageFragment extends Fragment {
         EditText editName = dialogView.findViewById(R.id.editProfileName);
         EditText editBio = dialogView.findViewById(R.id.editProfileBio);
         Button chooseImage = dialogView.findViewById(R.id.btnChooseProfileImage);
+        Button editTravelPreference = dialogView.findViewById(R.id.btnEditTravelPreference);
 
         editName.setText(currentUser.getNickname());
         editBio.setText(currentUser.getBio());
@@ -239,6 +242,11 @@ public class MyPageFragment extends Fragment {
         }
 
         chooseImage.setOnClickListener(v -> profileImageLauncher.launch(new String[]{"image/*"}));
+        editTravelPreference.setOnClickListener(v -> {
+            Intent intent = new Intent(requireContext(), SurveyActivity.class);
+            intent.putExtra(SurveyActivity.EXTRA_EDIT_MODE, true);
+            startActivity(intent);
+        });
 
         new AlertDialog.Builder(requireContext())
                 .setTitle("프로필 수정")

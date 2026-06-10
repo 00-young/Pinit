@@ -15,15 +15,31 @@
         android:contentDescription="프로필 사진 미리보기"
         android:scaleType="centerCrop" />
 
-    <Button
-        android:id="@+id/btnChooseProfileImage"
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="12dp"
-        android:backgroundTint="#FFF5CC"
-        android:text="사진 변경"
-        android:textColor="#000000" />
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnChooseProfileImage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#FFF5CC"
+            android:text="사진 변경"
+            android:textColor="#000000" />
+
+        <Button
+            android:id="@+id/btnEditTravelPreference"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:backgroundTint="#FFF5CC"
+            android:text="여행 성향 변경"
+            android:textColor="#000000" />
+    </LinearLayout>
 
     <EditText
         android:id="@+id/editProfileName"

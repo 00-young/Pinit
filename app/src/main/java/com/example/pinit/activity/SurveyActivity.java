@@ -21,8 +21,11 @@ import java.util.Map;
 
 public class SurveyActivity extends AppCompatActivity {
 
+    public static final String EXTRA_EDIT_MODE = "extra_edit_mode";
+
     private ChipGroup chipGroupAge, chipGroupCompanion, chipGroupTheme, chipGroupBudget;
     private Button btnDone;
+    private boolean editMode;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,8 +37,38 @@ public class SurveyActivity extends AppCompatActivity {
         chipGroupTheme = findViewById(R.id.chipGroupTheme);
         chipGroupBudget = findViewById(R.id.chipGroupBudget);
         btnDone = findViewById(R.id.btnSurveyDone);
+        editMode = getIntent().getBooleanExtra(EXTRA_EDIT_MODE, false);
+
+        if (editMode) {
+            btnDone.setText("저장");
+            loadCurrentSurvey();
+        }
 
         btnDone.setOnClickListener(v -> submitSurvey());
+    }
+
+    private void loadCurrentSurvey() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        String email = FirebaseAuth.getInstance().getCurrentUser().getEmail();
+        if (email == null) return;
+
+        FirebaseFirestore.getInstance()
+                .collection("users").document(email)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    if (snapshot == null || !snapshot.exists()) return;
+
+                    checkChipByText(chipGroupAge, snapshot.getString("ageGroup"));
+                    checkChipByText(chipGroupCompanion, snapshot.getString("companion"));
+                    checkChipByText(chipGroupBudget, snapshot.getString("budgetType"));
+
+                    String theme = snapshot.getString("theme");
+                    if (theme != null) {
+                        for (String value : theme.split(",")) {
+                            checkChipByText(chipGroupTheme, value.trim());
+                        }
+                    }
+                });
     }
 
     private void submitSurvey() {
@@ -66,7 +99,12 @@ public class SurveyActivity extends AppCompatActivity {
                     SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
                     prefs.edit().putBoolean("survey_done_" + email, true).apply();
 
-                    startActivity(new Intent(this, MainActivity.class));
+                    if (editMode) {
+                        Toast.makeText(this, "여행 성향이 수정되었습니다.", Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);
+                    } else {
+                        startActivity(new Intent(this, MainActivity.class));
+                    }
                     finish();
                 })
                 .addOnFailureListener(e -> {
@@ -90,5 +128,19 @@ public class SurveyActivity extends AppCompatActivity {
             if (chip != null) themes.add(chip.getText().toString());
         }
         return String.join(",", themes);
+    }
+
+    private void checkChipByText(ChipGroup group, String text) {
+        if (text == null || text.trim().isEmpty()) return;
+        String target = text.trim();
+        for (int i = 0; i < group.getChildCount(); i++) {
+            if (group.getChildAt(i) instanceof Chip) {
+                Chip chip = (Chip) group.getChildAt(i);
+                if (target.equals(chip.getText().toString())) {
+                    chip.setChecked(true);
+                    return;
+                }
+            }
+        }
     }
 }
