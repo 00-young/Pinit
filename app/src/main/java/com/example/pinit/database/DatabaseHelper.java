@@ -17,7 +17,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "traveltracker.db";
-    private static final int DB_VERSION = 2;
+    private static final int DB_VERSION = 1;
 
     public DatabaseHelper(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
@@ -45,24 +45,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion < 2) {
-            // schedules 테이블에 누락된 컬럼 추가 (기존 데이터 유지하고 싶을 경우 ALTER 사용)
-            // 여기서는 단순함을 위해 테이블 재생성 방식을 사용합니다.
-            db.execSQL("DROP TABLE IF EXISTS schedules");
-            db.execSQL("CREATE TABLE schedules (" +
-                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                    "trip_id INTEGER, " +
-                    "title TEXT, " +
-                    "date TEXT, " +
-                    "time TEXT, " +
-                    "place_name TEXT, " +
-                    "memo TEXT, " +
-                    "color TEXT, " +
-                    "latitude REAL, " +
-                    "longitude REAL, " +
-                    "google_place_id TEXT, " +
-                    "category TEXT)");
-        }
+        db.execSQL("DROP TABLE IF EXISTS trips");
+        db.execSQL("DROP TABLE IF EXISTS schedules");
+        db.execSQL("DROP TABLE IF EXISTS budgets");
+        db.execSQL("DROP TABLE IF EXISTS records");
+        onCreate(db);
     }
 
     // ========== TRIP ==========

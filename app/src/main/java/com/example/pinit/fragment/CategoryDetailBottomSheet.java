@@ -71,18 +71,7 @@ public class CategoryDetailBottomSheet extends BottomSheetDialogFragment {
             tvEmpty.setVisibility(View.VISIBLE);
         } else {
             rv.setLayoutManager(new LinearLayoutManager(requireContext()));
-            rv.setAdapter(new BudgetAdapter(requireContext(), filtered, id -> {
-                new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                        .setTitle("지출 내역 삭제")
-                        .setMessage("이 지출 내역을 삭제하시겠습니까?")
-                        .setPositiveButton("삭제", (dialog, which) -> {
-                            new com.example.pinit.database.DatabaseHelper(requireContext()).deleteBudget(id);
-                            dismiss(); // 데이터가 변경되었으므로 닫거나 부모를 갱신해야 함
-                            // 여기서는 간단히 닫음. 부모 갱신은 FragmentResult 등으로 가능
-                        })
-                        .setNegativeButton("취소", null)
-                        .show();
-            }));
+            rv.setAdapter(new BudgetAdapter(requireContext(), filtered, id -> {}));
         }
     }
 
